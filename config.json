@@ -1,0 +1,18 @@
+{
+  "mqttClientOptions": {
+    "port": 19001,
+    "host": "mqtts.3pi-solutions.com"
+  },
+  "mqttTopicIn": "RFID1",
+  "mqttTopicOut": "Out",
+  "mqttGroupId": "+",
+  "mqttPlaceId": "hotel",
+  "hotelClientOptions": {
+    "hotelHost": "127.0.0.11",
+    "hotelPort": 1011
+  },
+  "tcpListener": {
+    "listenerPort": 25008
+  },
+  "MqttClientTickerStart": 10000000
+}
