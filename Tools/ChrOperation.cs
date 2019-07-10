@@ -32,6 +32,9 @@ namespace hotel_mini_proxy.Tools
             return Encd.GetBytes(new char[] { chr })[0];
         }
 
+        public const char STX = (char)2;
+        public const char ETX = (char)3;
+        public const char Ask = (char)6;
 
     }
 }

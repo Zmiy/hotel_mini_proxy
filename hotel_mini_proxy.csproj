@@ -175,6 +175,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="PmsInterface\BestBar.cs" />
     <Compile Include="PmsInterface\FiasTCP.cs" />
     <Compile Include="PmsInterface\IInitNecessity.cs" />
     <Compile Include="PmsInterface\InitRoutine.cs" />

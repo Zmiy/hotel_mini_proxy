@@ -2,21 +2,20 @@
 using System.Collections.Generic;
 using System.Linq;
 using hotel_mini_proxy.Tools;
+using static hotel_mini_proxy.Tools.ChrOperation;
 
 namespace hotel_mini_proxy.PmsInterface
 {
-    public class FiasTcp : Protocol
+    public class BestBar : Protocol
     {
-        private static readonly char Stx = ChrOperation.Chr(2);
-        private static readonly char Etx = ChrOperation.Chr(3);
-        public FiasTcp()
+        public BestBar()
         {
-            InitRoutine = new FiasInit();
+            InitRoutine = new BestBarInit();
         }
 
         private static string Fdate()
         {
-            return DateTime.Now.ToString("MMddyyyy");
+            return DateTime.Now.ToString("yyMMdd");
         }
 
 
@@ -26,22 +25,23 @@ namespace hotel_mini_proxy.PmsInterface
             return DateTime.Now.ToString("HHmmss");
         }
 
+        //<STX>PS|RN2215|PTC|P#1|TA1538|DA180323|TI104918|CTGardena|<ETX>
         private static string BuildBillingString(InvoiceObject obj)
         {
             var bill =
-                $"PS|DA{Fdate()}|PTC|RN{obj.roomN}|P#{obj.ticket:0000}|TA{obj.price}|TI{Ftime()}|X1{obj.productName}|";
+                $"PS|DA{Fdate()}|PTC|RN{obj.roomN}|P#{obj.ticket:00000000}|TA{obj.price}|TI{Ftime()}|CT{obj.productName}|";
             return bill;
         }
 
-        public string AAA => $"{Stx}LS|DA{Fdate()}|TI{Ftime()}|{Etx}";
+
         public override string GetInitRequestString()
         {
-            return $"{Stx}LS|DA{Fdate()}|TI{Ftime()}|{Etx}";
+            return $"{STX}LS|DA{Fdate()}|TI{Ftime()}|{ETX}";
         }
 
         public override string MakeBillingString(InvoiceObject obj)
         {
-            return $"{Stx}{BuildBillingString(obj)}{Etx}";
+            return $"{STX}{BuildBillingString(obj)}{ETX}";
         }
 
         public override List<ParserResult> Parcer(string str)
@@ -49,7 +49,7 @@ namespace hotel_mini_proxy.PmsInterface
             var result = new List<ParserResult>();
             var currResult = new ParserResult();
 
-            str = str.TrimStart(Stx).TrimEnd(Etx);
+            str = str.TrimStart(STX).TrimEnd(ETX);
             var parcer = str.Split('|');
             switch (parcer[0])
             {
@@ -144,16 +144,13 @@ namespace hotel_mini_proxy.PmsInterface
             return result;
         }
         //Received:GI|RN000402|NPN|MRMU|<>
+        //<STX>GI|RN1317 |MRMU|DA180323|TI104921|<ETX>
         private static bool NoPostParcer(IEnumerable<string> parcer)
         {
             var result = false; //Regular checkin
-            var resultOfParce = parcer.Where(str => str.ToUpper().Contains("NP") || str.ToUpper().Contains("MR")).ToDictionary(str => str.Substring(0, 2).ToUpper(), str => str.Substring(2).ToUpper());
-            if (resultOfParce.ContainsKey("NP") && resultOfParce["NP"].Equals("Y")) //check if nopost is true
-            {
-                result = true;
-            }
+            var resultOfParce = parcer.Where(str => str.ToUpper().Contains("MR")).ToDictionary(str => str.Substring(0, 2).ToUpper(), str => str.Substring(2).ToUpper());
 
-            if (!result && resultOfParce.ContainsKey("MR") && resultOfParce["MR"].Equals("ML")) // check minibar right
+            if (resultOfParce.ContainsKey("MR") && resultOfParce["MR"].Equals("ML")) // check minibar right
             {
                 result = true;
             }
@@ -170,11 +167,11 @@ namespace hotel_mini_proxy.PmsInterface
             }
             return result;
         }
-
+        //<STX>PA|RN1609|ANOK|P#3|DA180323|TI173411|<ETX>
         private static ParserResult AnswerParser(IEnumerable<string> parser)
         {
             var result = new ParserResult();
-            //Dim result1 As Dictionary(Of String, String) = (From str In arr Where str.Length >= 2).ToDictionary(Function(str) str.Substring(0, 2), Function(str) s.Substring(2)) 
+
             var resultOfParsing =
                 parser.Where(str => str.Length >= 2)
                     .ToDictionary(str => str.Substring(0, 2).ToUpper(), str => str.Substring(2).ToUpper());
@@ -184,8 +181,8 @@ namespace hotel_mini_proxy.PmsInterface
             {
                 result.Ticket = TypeParser.Int32TryParse(resultOfParsing["P#"]);
             }
-            if (!resultOfParsing.ContainsKey("AS")) return result;
-            switch (resultOfParsing["AS"])
+            if (!resultOfParsing.ContainsKey("AN")) return result;
+            switch (resultOfParsing["AN"])
             {
                 case "OK":
                     result.Command = Command.AsOk;

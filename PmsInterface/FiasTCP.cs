@@ -2,13 +2,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using hotel_mini_proxy.Tools;
+using static hotel_mini_proxy.Tools.ChrOperation;
 
 namespace hotel_mini_proxy.PmsInterface
 {
     public class FiasTcp : Protocol
     {
-        private static readonly char Stx = ChrOperation.Chr(2);
-        private static readonly char Etx = ChrOperation.Chr(3);
+
         public FiasTcp()
         {
             InitRoutine = new FiasInit();
@@ -16,7 +16,7 @@ namespace hotel_mini_proxy.PmsInterface
 
         private static string Fdate()
         {
-            return DateTime.Now.ToString("MMddyyyy");
+            return DateTime.Now.ToString("yyMMdd");
         }
 
 
@@ -33,15 +33,15 @@ namespace hotel_mini_proxy.PmsInterface
             return bill;
         }
 
-        public string AAA => $"{Stx}LS|DA{Fdate()}|TI{Ftime()}|{Etx}";
+
         public override string GetInitRequestString()
         {
-            return $"{Stx}LS|DA{Fdate()}|TI{Ftime()}|{Etx}";
+            return $"{STX}LS|DA{Fdate()}|TI{Ftime()}|{ETX}";
         }
 
         public override string MakeBillingString(InvoiceObject obj)
         {
-            return $"{Stx}{BuildBillingString(obj)}{Etx}";
+            return $"{STX}{BuildBillingString(obj)}{ETX}";
         }
 
         public override List<ParserResult> Parcer(string str)
@@ -49,7 +49,7 @@ namespace hotel_mini_proxy.PmsInterface
             var result = new List<ParserResult>();
             var currResult = new ParserResult();
 
-            str = str.TrimStart(Stx).TrimEnd(Etx);
+            str = str.TrimStart(STX).TrimEnd(ETX);
             var parcer = str.Split('|');
             switch (parcer[0])
             {

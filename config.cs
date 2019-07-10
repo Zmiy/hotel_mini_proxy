@@ -13,6 +13,7 @@ namespace hotel_mini_proxy
         internal int HotelPort { get; private set; }
         internal int ListenerPort { get; private set; }
         internal int MqttClientTickerStart { get; private set; }
+        internal string Interface { get; private set; }
         private readonly string _mqttGroupId;
         private readonly string _mqttPlaceId;
         private readonly string _mqttTopicIn;
@@ -37,11 +38,12 @@ namespace hotel_mini_proxy
                 this.HotelPort = config["hotelClientOptions"]["hotelPort"]; //PMS's host
                 this.ListenerPort = config["tcpListener"]["listenerPort"];  //Port for the Proxy's TCP listhener. proxy listen this port on any intefaces.
                 this.MqttClientTickerStart = config["MqttClientTickerStart"]; //Min ticket number of MQTT client
+                this.Interface = config["hotelClientOptions"]["interface"];
             }
         }
 
         public string SubscribeTopic => $"{_mqttPlaceId}/{_mqttGroupId}/{_mqttTopicIn}";
-        public string PublicTopic => $"{_mqttPlaceId}/{0}/{_mqttTopicOut}";
+        public string PublicTopic => $"{_mqttPlaceId}/{_mqttGroupId}/{_mqttTopicOut}";
 
     }
 }

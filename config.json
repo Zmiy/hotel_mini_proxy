@@ -3,13 +3,14 @@
     "port": 19001,
     "host": "mqtts.3pi-solutions.com"
   },
-  "mqttTopicIn": "RFID1",
-  "mqttTopicOut": "Out",
-  "mqttGroupId": "+",
-  "mqttPlaceId": "hotel",
+  "mqttTopicIn": "transponder",
+  "mqttTopicOut": "receiver",
+  "mqttGroupId": "gate",
+  "mqttPlaceId": "hotel_n",
   "hotelClientOptions": {
     "hotelHost": "127.0.0.11",
-    "hotelPort": 1011
+    "hotelPort": 1011,
+    "interface": "BestBar"
   },
   "tcpListener": {
     "listenerPort": 25008

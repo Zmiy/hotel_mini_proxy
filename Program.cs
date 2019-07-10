@@ -13,7 +13,7 @@ using uPLibrary.Networking.M2Mqtt;
 using uPLibrary.Networking.M2Mqtt.Messages;
 using TcpLibrary;
 using TcpClient = TcpLibrary.TcpClient;
-
+using static hotel_mini_proxy.Tools.ChrOperation;
 
 namespace hotel_mini_proxy
 {
@@ -26,15 +26,10 @@ namespace hotel_mini_proxy
         private static readonly TcpServer HotelListener = new TcpServer();
         private static Config _config;
         private static readonly ManualResetEvent Done = new ManualResetEvent(false);
-        private static readonly Protocol ProtFias = new FiasTcp();
-        private static readonly char Stx = ChrOperation.Chr(2);
-        private static readonly char Etx = ChrOperation.Chr(3);
+        private static Protocol _prot;
+        //private static readonly char Stx = ChrOperation.Chr(2);
+        //private static readonly char Etx = ChrOperation.Chr(3);
 
-
-        private static string getChanelFromMsg(string message)
-        {
-            return message.Split('/').Length > 1 ? message.Split('/')[1] : string.Empty;
-        }
 
         private static void TryConnect2Pms()
         {
@@ -57,7 +52,7 @@ namespace hotel_mini_proxy
         {
             Task tsk = new Task(TryConnect2Mqtt);
             tsk.Start();
-            //await Task.Run(() => TryConnect2Mqtt());
+
             Task.WaitAll(tsk);
         }
 
@@ -222,7 +217,7 @@ namespace hotel_mini_proxy
                 return;
             }
             //var messFias = mess.Substring(1, mess.Length - 1);
-            var s = mess.Trim(Stx, Etx).Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
+            var s = mess.Trim(STX, ETX).Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
             switch (s[0])
             {
                 case "LS":
@@ -263,17 +258,17 @@ namespace hotel_mini_proxy
                     s += ChrOperation.Chr(c);
                 }
             }
-            string[] answers = s.Split(new char[] { Etx }, StringSplitOptions.RemoveEmptyEntries);
+            string[] answers = s.Split(new char[] { ETX }, StringSplitOptions.RemoveEmptyEntries);
             foreach (var answer in answers)
             {
-                List<ParserResult> results = ProtFias.Parcer($"{answer}{Etx}");
+                List<ParserResult> results = _prot.Parcer($"{answer}{ETX}");
                 foreach (var command in results)
                 {
                     switch (command.Command)
                     {
                         case Command.Init:
                             {
-                                var initStrings = ProtFias.InitString.ToString().Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                                var initStrings = _prot.InitString.ToString().Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
                                 foreach (var currentInitStr in initStrings)
                                 {
                                     HotelPmsClient.SendData(currentInitStr);
@@ -288,14 +283,15 @@ namespace hotel_mini_proxy
                                 if (command.Ticket >= _config.MqttClientTickerStart)
                                 {
                                     //send answer to mqtt
-                                    _client.Publish("wotqbxcv2G/3PI_5CCF7F23EC3B/TZR", Encoding.UTF8.GetBytes(answer.Trim(Stx, Etx)), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, true);
+                                    //_client.Publish("wotqbxcv2G/3PI_5CCF7F23EC3B/TZR", Encoding.UTF8.GetBytes(answer.Trim(Stx, Etx)), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, true);
+                                    _client.Publish(_config.PublicTopic, Encoding.UTF8.GetBytes(answer.Trim(STX, ETX)), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, true);
                                 }
                                 else
                                 {
                                     //send answer to tcp
                                     if (HotelListener.Clients.Count > 0)
                                     {
-                                        HotelListener.Clients[0].SendData($"{answer}{Etx}");
+                                        HotelListener.Clients[0].SendData($"{answer}{ETX}");
                                     }
 
 
@@ -309,7 +305,7 @@ namespace hotel_mini_proxy
                                 {
                                     foreach (TcpSocket client in HotelListener.Clients)
                                     {
-                                        client.SendData($"{answer}{Etx}");
+                                        client.SendData($"{answer}{ETX}");
                                     }
                                 }
 
@@ -327,20 +323,38 @@ namespace hotel_mini_proxy
         private static bool _fiasConnectionEstablished;
         private static void HotelPmsClient_Connected()
         {
+            switch (_config.Interface)
+            {
+                case "BestBar":
+                    {
+                        _prot = new BestBar();
+                        break;
+                    }
+                case "Homi":
+                    {
+                        _prot = new FiasTcp();
+                        break;
+                    }
+                default:
+                    {
+                        _prot = new FiasTcp();
+                        break;
+                    }
+            }
             Console.WriteLine("Client Connected");
             Thread.Sleep(5100);
             _fiasConnectionEstablished = false;
             if (!_fiasConnectionEstablished)
             {
-                Console.WriteLine($"Send to the PMS: {ProtFias.GetInitRequestString()}");
-                HotelPmsClient.SendData(ProtFias.GetInitRequestString());
+                Console.WriteLine($"Send to the PMS: {_prot.GetInitRequestString()}");
+                HotelPmsClient.SendData(_prot.GetInitRequestString());
             }
 
         }
 
         private static void Client_MqttMsgPublishReceived(object sender, MqttMsgPublishEventArgs e)
         {
-            //throw new NotImplementedException();
+
             var sb = new StringBuilder();
             foreach (char c in Encoding.ASCII.GetChars(e.Message).Where(c => !char.IsControl(c)))
             {
@@ -349,11 +363,9 @@ namespace hotel_mini_proxy
 
             sb.AppendLine();
             var result = sb.ToString();
-            // publish a message on "/home/temperature" topic with QoS 2
+            HotelPmsClient.SendData(result);
 
-            _client.Publish("wotqbxcv2G/3PI_5CCF7F23EC3B/TZR", Encoding.UTF8.GetBytes("Message received"), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, true);
-            Console.WriteLine(e.Topic);
-            Console.WriteLine(result);
+            Console.WriteLine($"Received From MQTT (topic:{e.Topic}): {result}");
         }
 
         private static void Client_MqttMsgSubscribed(object sender, MqttMsgSubscribedEventArgs e)
