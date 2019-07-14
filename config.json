@@ -1,19 +1,19 @@
 {
   "mqttClientOptions": {
-    "port": 19001,
+    "port": 39001,
     "host": "mqtts.3pi-solutions.com"
   },
-  "mqttTopicIn": "transponder",
-  "mqttTopicOut": "receiver",
+  "mqttTopicIn": "receiver",
+  "mqttTopicOut": "transponder",
   "mqttGroupId": "gate",
   "mqttPlaceId": "hotel_n",
   "hotelClientOptions": {
     "hotelHost": "127.0.0.11",
     "hotelPort": 1011,
-    "interface": "BestBar"
+    "interface": "Homi"
   },
   "tcpListener": {
     "listenerPort": 25008
   },
-  "MqttClientTickerStart": 10000000
+  "MqttClientTicketStart": 10000000
 }

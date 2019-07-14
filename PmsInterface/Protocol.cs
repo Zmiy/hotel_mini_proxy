@@ -13,6 +13,7 @@ namespace hotel_mini_proxy.PmsInterface
         public string tva;
         public int ticket;
         public string group;
+
     }
 
     public enum Command
@@ -30,7 +31,8 @@ namespace hotel_mini_proxy.PmsInterface
         NightAudit,
         AreYouThere,
         AsOk,
-        AsNg
+        AsNg,
+
     }
 
     public sealed class ParserResult

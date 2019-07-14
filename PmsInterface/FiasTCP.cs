@@ -44,6 +44,22 @@ namespace hotel_mini_proxy.PmsInterface
             return $"{STX}{BuildBillingString(obj)}{ETX}";
         }
 
+        public InvoiceObject ParceBilingString(string str2Parse)
+        {
+            InvoiceObject result = new InvoiceObject();
+            Dictionary<string, string> parsedStr = (str2Parse.Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries)).Where(str => str.Length >= 2).ToDictionary(str => str.Substring(0, 2).ToUpper(), str => str.Substring(2).ToUpper());
+            result.roomN = parsedStr["RN"];
+            result.productName = parsedStr["X1"];
+            result.price = parsedStr["TA"];
+            result.group = "1";
+            result.qty = "1";
+            result.tva = "0";
+            result.ticket = Convert.ToInt32(parsedStr["P#"]);
+
+            return result;
+        }
+
+
         public override List<ParserResult> Parcer(string str)
         {
             var result = new List<ParserResult>();
