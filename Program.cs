@@ -10,6 +10,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using hotel_mini_proxy.PmsInterface;
 using hotel_mini_proxy.Tools;
+using NLog;
+using NLog.LayoutRenderers;
 using uPLibrary.Networking.M2Mqtt;
 using uPLibrary.Networking.M2Mqtt.Messages;
 using TcpLibrary;
@@ -20,25 +22,25 @@ namespace hotel_mini_proxy
 {
     internal static class Program
     {
-        private static MqttClient _clientMqtt = null;
-        //private static readonly ManualResetEvent WaitForSubscribed = new ManualResetEvent(false);
-        //private static readonly object ConLock = new object();
+        private static MqttClient _clientMqtt;
         private static readonly TcpClient HotelPmsClient = new TcpClient();
         private static readonly TcpServer HotelListener = new TcpServer();
         private static Config _config;
-        //private static readonly ManualResetEvent Done = new ManualResetEvent(false);
         private static Protocol _prot;
         private static X509Certificate2 _clientCert;
         private static X509Certificate _caCert;
+        private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
-
+        //async connect to PMS - try until connect
         private static void TryConnect2Pms()
         {
-            Console.WriteLine($"Try connect to the PMS of the hotel: {_config.HotelHost}:{_config.HotelPort}");
+            //Console.WriteLine($"Try connect to the PMS of the hotel: {_config.HotelHost}:{_config.HotelPort}");
+            Logger.Info($"Try connect to the PMS of the hotel: {_config.HotelHost}:{_config.HotelPort}");
             int atempt = 0;
             while (!HotelPmsClient.IsConnected)
             {
-                Console.WriteLine($"TCP Try ...{++atempt}");
+                //Console.WriteLine($"TCP: pms client try to connect... {++atempt}");
+                Logger.Trace($"TCP: pms client Try to connect ... {++atempt}");
                 HotelPmsClient.Connect(_config.HotelHost, _config.HotelPort);
                 Thread.Sleep(10 * 1000);
             }
@@ -54,46 +56,83 @@ namespace hotel_mini_proxy
 
         private static void Connect2Mqtt()
         {
-            Task tsk = new Task(TryConnect2Mqtt);
+            //Task tsk = new Task(TryConnect2Mqtt);
+            Task tsk = new Task(CreateMqttClient);
             tsk.Start();
 
             Task.WaitAll(tsk);
+        }
+
+        //create new MQTTC client
+        private static void CreateMqttClient()
+        {
+            while (_clientMqtt == null)
+            {
+                try
+                {
+                    //_clientCert = new X509Certificate2("cert/client.pfx", "tkphbv#1");
+                    _clientCert = new X509Certificate2("cert/client.key");
+                    _caCert = X509Certificate.CreateFromCertFile("cert/server.crt");
+                    _clientMqtt = new MqttClient(_config.MqttHost, _config.MqttPort, _config.UseSsl, _caCert, _clientCert, MqttSslProtocols.TLSv1_2);
+
+                    _clientMqtt.MqttMsgSubscribed += _clientMqtt_MqttMsgSubscribed;
+                    _clientMqtt.ConnectionClosed += _clientMqtt_ConnectionClosed;
+                    _clientMqtt.ProtocolVersion = MqttProtocolVersion.Version_3_1_1;
+
+                }
+                catch (Exception ex)
+                {
+                    //Console.WriteLine($"Issues creating MQTT Client{ex.Message}\n{ex.InnerException}");
+                    Logger.Error($"Issues creating MQTT Client{ex.Message}\n{ex.InnerException}");
+                    Thread.Sleep(30 * 1000);
+                }
+            }
+            TryConnect2Mqtt();
+
         }
 
         private static void TryConnect2Mqtt()
         {
             int atempt = 0;
 
-            Console.WriteLine("Try to connect to mqtt");
+            //Console.WriteLine("Try to connect to mqtt");
+            Logger.Info("Try connect to MQTT");
             var clientId = "hotel_mini_proxy";//Guid.NewGuid().ToString();
-            _clientMqtt.Unsubscribe(new string[] { _config.SubscribeTopic });
-
+            _clientMqtt.Unsubscribe(new[] { _config.SubscribeTopic });
             while (!_clientMqtt.IsConnected)
             {
 
                 try
                 {
-                    Console.WriteLine($"MQTT Try ...{++atempt}");
+                    //Console.WriteLine($"MQTT Try to connect... {++atempt}");
+                    Logger.Trace($"MQTT Try to connect... {++atempt}, { _config.UserName},{_config.Password}");
                     Thread.Sleep(30 * 1000);
-                    _clientMqtt.Connect(clientId + atempt);
+                    var code = _config.UseAutorization ? _clientMqtt.Connect(clientId + atempt, _config.UserName, _config.Password, false, 60) : _clientMqtt.Connect(clientId + atempt, null, null, false, 60);
 
+                    //139.162.222.115, MATZI
+                    //matzi /
+                    Logger.Info($"connection code: {code}");
                 }
+
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"{ex.Message}\n {ex.InnerException}\nSleep 30sec");
+                    //Console.WriteLine($"{ex.Message}\n {ex.InnerException}\nSleep 30sec");
+                    Logger.Error($"{ex}", "Failed connect to MQTT");
                     Thread.Sleep(30 * 1000);
                 }
 
             }
-            Console.WriteLine("Subscribe to the topic: {0} ", _config.SubscribeTopic);
+            //Console.WriteLine("Subscribing to the topic: {0} ", _config.SubscribeTopic);
+            Logger.Trace("Subscribing to the topic: {0} ", _config.SubscribeTopic);
+            //logger.Info("Subscribe to the topic: {0} ", _config.SubscribeTopic);
 
-            //$"{_mqttPlaceId}/{_mqttGroupId}/{_mqttTopic}");
-            _clientMqtt.Subscribe(new string[] { _config.SubscribeTopic }, new byte[] { MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE });
+            var msgId = _clientMqtt.Subscribe(new[] { _config.SubscribeTopic }, new[] { MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE });
         }
 
         static void Main(string[] args)
         {
 
+            Logger.Info("------------Started------------");
             _config = new Config(); //read a configuration info
             //Client to PMS
             HotelPmsClient.Connected += HotelPmsClient_Connected;
@@ -108,67 +147,64 @@ namespace hotel_mini_proxy
             IPAddress ipListener = IPAddress.Any;//LocalIpAddress();
             HotelListener.Port(ipListener, _config.ListenerPort);
             HotelListener.StartListen();
-            Console.WriteLine("Start listening on {0}:{1}", ipListener, _config.ListenerPort);
-
+            //Console.WriteLine("Start listening on {0}:{1}", ipListener, _config.ListenerPort);
+            Logger.Info("Start listening on {0}:{1}", ipListener, _config.ListenerPort);
 
             //MQTT connect
-            _clientCert = new X509Certificate2("cert/client2048.pfx", "tkphbv#1");
-            _caCert = X509Certificate.CreateFromCertFile("cert/3pi-solutions-CA.crt");
-            // Then create the client referencing the certs
-            _clientMqtt = new MqttClient(_config.MqttHost, _config.MqttPort, true, null, null, MqttSslProtocols.TLSv1_2);
+            //_clientCert = new X509Certificate2("cert/client2048.pfx", "tkphbv#1");
 
-            //_clientMqtt = new MqttClient(_config.MqttHost, _config.MqttPort, true,X509Certificate.CreateFromCertFile("cert/3pi-solutions-CA.crt"), new X509Certificate(), MqttSslProtocols.TLSv1_2);
-            //_clientMqtt = new MqttClient(_config.MqttHost, _config.MqttPort, true, X509Certificate.CreateFromCertFile("cert/3pi-solutions-CA.crt"), X509Certificate.CreateFromCertFile("cert/client2048.crt"), MqttSslProtocols.TLSv1_2);
-            _clientMqtt.MqttMsgSubscribed += Client_MqttMsgSubscribed;
-            _clientMqtt.ConnectionClosed += _client_ConnectionClosed;
+            _clientCert = new X509Certificate2("cert/client.crt");
+            _caCert = X509Certificate.CreateFromCertFile("cert/server.crt");
+            //ServicePointManager.ServerCertificateValidationCallback += (s,  certificate, chain, sslPolicyErrors);//=> true;
+            //ServicePointManager.ServerCertificateValidationCallback += delegate { return true; };
+            ServicePointManager.ServerCertificateValidationCallback += new RemoteCertificateValidationCallback(ValidateRemoteCertificate);
+            _clientMqtt = new MqttClient(_config.MqttHost, _config.MqttPort, _config.UseSsl, _caCert, _clientCert, MqttSslProtocols.TLSv1_2);
+
+            _clientMqtt.MqttMsgSubscribed += _clientMqtt_MqttMsgSubscribed;
+            _clientMqtt.ConnectionClosed += _clientMqtt_ConnectionClosed;
             _clientMqtt.ProtocolVersion = MqttProtocolVersion.Version_3_1_1;
             Connect2Mqtt();
-            
-            Console.WriteLine("End Of main");
+
+            //Console.WriteLine("End Of main");
         }
+
 
         private static bool ValidateRemoteCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
-            var certificateToValidate = new X509Certificate2(certificate);
+            return true;
+            //var certificateToValidate = new X509Certificate2(certificate);
 
-            chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-            chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
-            chain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority; // We have an untrusted root ca certificate
-            chain.ChainPolicy.VerificationTime = DateTime.Now;
-            chain.ChainPolicy.UrlRetrievalTimeout = new TimeSpan(0, 0, 0);
+            //chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            //chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
+            //chain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority; // We have an untrusted root ca certificate
+            //chain.ChainPolicy.VerificationTime = DateTime.Now;
+            //chain.ChainPolicy.UrlRetrievalTimeout = new TimeSpan(0, 0, 0);
 
-            chain.ChainPolicy.ExtraStore.Add(_clientCert);
-            bool isChainValid = chain.Build(certificateToValidate);
-            if (!isChainValid)
-            {
-                string[] errors = chain.ChainStatus
-                    .Select(x => $"{x.StatusInformation.Trim()} ({x.Status})")
-                    .ToArray();
+            //chain.ChainPolicy.ExtraStore.Add(_clientCert);
+            //bool isChainValid = chain.Build(certificateToValidate);
+            //if (!isChainValid)
+            //{
+            //    string[] errors = chain.ChainStatus
+            //        .Select(x => $"{x.StatusInformation.Trim()} ({x.Status})")
+            //        .ToArray();
 
-                string certificateErrorsString = "Unknown errors.";
-                if (errors.Length > 0)
-                {
-                    certificateErrorsString = string.Join(", ", errors);
-                }
+            //    string certificateErrorsString = "Unknown errors.";
+            //    if (errors.Length > 0)
+            //    {
+            //        certificateErrorsString = string.Join(", ", errors);
+            //    }
 
-                throw new Exception("Trust chain did not complete to the known authority anchor. Errors: " + certificateErrorsString);
-            }
+            //    throw new Exception("Trust chain did not complete to the known authority anchor. Errors: " + certificateErrorsString);
+            //}
 
-            // Check if chain contains our root ca certificate
-            var valid = chain.ChainElements
-                .Cast<X509ChainElement>()
-                .Any(x => x.Certificate.Thumbprint == _clientCert.Thumbprint);
+            //// Check if chain contains our root ca certificate
+            //var valid = chain.ChainElements
+            //    .Cast<X509ChainElement>()
+            //    .Any(x => x.Certificate.Thumbprint == _clientCert.Thumbprint);
 
-            return valid;
+            //return valid;
         }
 
-
-        private static void _client_ConnectionClosed(object sender, EventArgs e)
-        {
-            Console.WriteLine("--------MQTT Connection closed-----------");
-            _clientMqtt.Unsubscribe(new string[] { _config.SubscribeTopic });
-            Connect2Mqtt();
-        }
 
         private static void HotelPmsClient_Disconnect()
         {
@@ -177,7 +213,8 @@ namespace hotel_mini_proxy
 
         private static void _hotelListener_Connected(TcpSocket client)
         {
-            Console.WriteLine("Hotel Listener: client ({0}) connected", client.Tag);
+            //Console.WriteLine("Hotel Listener: client ({0}) connected", client.Tag);
+            Logger.Trace("Hotel Listener: client ({0}) connected", client.Tag);
         }
 
         private static void _hotelListener_DataArrival(TcpSocket client, long available)
@@ -231,7 +268,9 @@ namespace hotel_mini_proxy
                         }
                 }
             } while (client.BytesAvailable != 0);
-            Console.WriteLine($"Received from minibar client: {trame}");
+            //Console.WriteLine($"Received from minibar client: {trame}");
+            var logMessage = (trame.Length == 1 & trame.Equals("6")) ? "<Ask>" : $"<STX>{trame.Trim(new char[] { STX, ETX })}<ETX>";
+            Logger.Info($"Received from minibar client: {logMessage}");
             Recoimessagefiastcp(trame);
         }
 
@@ -316,7 +355,8 @@ namespace hotel_mini_proxy
                                 {
                                     HotelPmsClient.SendData(currentInitStr);
 
-                                    Console.WriteLine($"Current init string: <STX>{currentInitStr.TrimStart(STX).TrimEnd(ETX)}<ETX>");
+                                    //Console.WriteLine($"Current init string: <STX>{currentInitStr.TrimStart(STX).TrimEnd(ETX)}<ETX>");
+                                    Logger.Trace($"Current init string: <STX>{currentInitStr.TrimStart(STX).TrimEnd(ETX)}<ETX>");
                                 }
 
                                 break;
@@ -365,8 +405,9 @@ namespace hotel_mini_proxy
                                 break;
                             }
                     }
-                    
-                    Console.WriteLine($"{answer}: {command.Command}");
+
+                    //Console.WriteLine($"Pms client received:{answer}: {command.Command}");
+                    Logger.Trace($"Pms client received:{answer}: {command.Command}");
                 }
 
             }
@@ -395,18 +436,27 @@ namespace hotel_mini_proxy
                         break;
                     }
             }
-            Console.WriteLine("Client Connected");
+            //Console.WriteLine("Client Connected");
             Thread.Sleep(5100);
             _fiasConnectionEstablished = false;
             if (!_fiasConnectionEstablished)
             {
-                Console.WriteLine($"Send to the PMS: {_prot.GetInitRequestString()}");
+                //Console.WriteLine($"Send to the PMS: {_prot.GetInitRequestString()}");
+                Logger.Trace($"Send to the PMS: {_prot.GetInitRequestString()}");
                 HotelPmsClient.SendData(_prot.GetInitRequestString());
             }
 
         }
 
-        private static void Client_MqttMsgPublishReceived(object sender, MqttMsgPublishEventArgs e)
+        private static void _clientMqtt_ConnectionClosed(object sender, EventArgs e)
+        {
+            //Console.WriteLine("--------MQTT Connection closed-----------");
+            Logger.Warn("--------MQTT Connection closed-----------");
+            _clientMqtt.Unsubscribe(new string[] { _config.SubscribeTopic });
+            _clientMqtt = null;
+            Connect2Mqtt();
+        }
+        private static void _clientMqtt_MqttMsgPublishReceived(object sender, MqttMsgPublishEventArgs e)
         {
 
             var msg = Encoding.UTF8.GetString(e.Message);
@@ -421,41 +471,35 @@ namespace hotel_mini_proxy
             {
                 HotelPmsClient.SendData($"{STX}{msg}{ETX}");
             }
-            Console.WriteLine($"Received From MQTT (topic:{e.Topic}): {Encoding.UTF8.GetString(e.Message)} and send to PMS: <STX>{msg.Trim(new char[] { ETX, STX })}<ETX>, clientId={_clientMqtt.ClientId}");
+            //Console.WriteLine($"Received From MQTT (topic:{e.Topic}): {Encoding.UTF8.GetString(e.Message)} and send to PMS: <STX>{msg.Trim(new char[] { ETX, STX })}<ETX>, clientId={_clientMqtt.ClientId}");
+            Logger.Trace($"Received From MQTT (topic:{e.Topic}): {Encoding.UTF8.GetString(e.Message)}\n\t\tSend to PMS: <STX>{msg.Trim(new char[] { ETX, STX })}<ETX>, clientId={_clientMqtt.ClientId}");
+
         }
 
-        private static void Client_MqttMsgSubscribed(object sender, MqttMsgSubscribedEventArgs e)
+        private static void _clientMqtt_MqttMsgSubscribed(object sender, MqttMsgSubscribedEventArgs e)
         {
 
-            //throw new NotImplementedException();
-            Console.WriteLine($"Subscribed To Mqtt Broker {_clientMqtt.WillTopic}");
-
-            _clientMqtt.MqttMsgPublishReceived += Client_MqttMsgPublishReceived;
-            _clientMqtt.MqttMsgPublished += _client_MqttMsgPublished;
-            _clientMqtt.MqttMsgUnsubscribed += _client_MqttMsgUnsubscribed;
+            //Console.WriteLine($"Subscribed To Mqtt Broker {_clientMqtt.WillTopic}");
+            Logger.Trace($"Subscribed To Mqtt Broker {_clientMqtt.WillTopic}, {e.MessageId}");
+            _clientMqtt.MqttMsgPublishReceived += _clientMqtt_MqttMsgPublishReceived;
+            _clientMqtt.MqttMsgPublished += _clientMqtt_MqttMsgPublished;
+            _clientMqtt.MqttMsgUnsubscribed += _clientMqtt_MqttMsgUnsubscribed;
 
         }
 
-        private static void _client_MqttMsgUnsubscribed(object sender, MqttMsgUnsubscribedEventArgs e)
+        private static void _clientMqtt_MqttMsgUnsubscribed(object sender, MqttMsgUnsubscribedEventArgs e)
         {
-            Console.WriteLine("Unsubscribe");
-
+            //Console.WriteLine("Unsubscribe");
+            Logger.Warn("MQTT client unsubscribed");
 
         }
 
-        private static void _client_MqttMsgPublished(object sender, MqttMsgPublishedEventArgs e)
+        private static void _clientMqtt_MqttMsgPublished(object sender, MqttMsgPublishedEventArgs e)
         {
-            //throw new NotImplementedException();
-
-            Console.WriteLine("Mesage sent, messageId:{0}", e.MessageId);
+            //Console.WriteLine("MQTT client: Mesage sent, messageId:{0}", e.MessageId);
+            Logger.Trace("MQTT client: Mesage sent, messageId:{0}", e.MessageId);
         }
 
-        //private static void DemandWorked(Task task)
-        //{
-        //    task.Wait();
-
-
-        //}
 
         private static IPAddress LocalIpAddress()
         {

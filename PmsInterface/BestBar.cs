@@ -167,7 +167,7 @@ namespace hotel_mini_proxy.PmsInterface
             }
             return result;
         }
-        //<STX>PA|RN1609|ANOK|P#3|DA180323|TI173411|<ETX>
+
         private static ParserResult AnswerParser(IEnumerable<string> parser)
         {
             var result = new ParserResult();
@@ -181,8 +181,9 @@ namespace hotel_mini_proxy.PmsInterface
             {
                 result.Ticket = TypeParser.Int32TryParse(resultOfParsing["P#"]);
             }
-            if (!resultOfParsing.ContainsKey("AN")) return result;
-            switch (resultOfParsing["AN"])
+            //if (!resultOfParsing.ContainsKey("AN") || !resultOfParsing.ContainsKey("AS")) return result;
+            string answ = resultOfParsing.ContainsKey("AN") ? resultOfParsing["AN"] : resultOfParsing.ContainsKey("AS") ? resultOfParsing["AS"] : "";
+            switch (answ)
             {
                 case "OK":
                     result.Command = Command.AsOk;
@@ -194,7 +195,6 @@ namespace hotel_mini_proxy.PmsInterface
                     result.Command = Command.UnKnown;
                     break;
             }
-
             return result;
         }
     }

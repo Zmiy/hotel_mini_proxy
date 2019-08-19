@@ -36,7 +36,7 @@ namespace hotel_mini_proxy.PmsInterface
         {
             var init = new StringBuilder();
             var dt = DateTime.Now;
-            init.AppendLine($"{STX}LD|DA{dt.ToString("yyMMdd")}TI{dt.ToString("HHmmss")}| V#1.00|IFMB|{ETX}");
+            init.AppendLine($"{STX}LD|DA{dt.ToString("yyMMdd")}TI{dt.ToString("HHmmss")}|V#1.00|IFMB|{ETX}");
             init.AppendLine($"{STX}LR|RIGI|FLG#RNMRDATI|{ETX}");
             init.AppendLine($"{STX}LR|RIGO|FLG#RNDATI|{ETX}");
             init.AppendLine($"{STX}LR|RIGC|FLG#RNROMRDATI|{ETX}");
