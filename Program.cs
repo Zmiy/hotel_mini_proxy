@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using hotel_mini_proxy.PmsInterface;
 using hotel_mini_proxy.Tools;
 using NLog;
+using NLog.Fluent;
 using NLog.LayoutRenderers;
 using uPLibrary.Networking.M2Mqtt;
 using uPLibrary.Networking.M2Mqtt.Messages;
@@ -34,12 +35,11 @@ namespace hotel_mini_proxy
         //async connect to PMS - try until connect
         private static void TryConnect2Pms()
         {
-            //Console.WriteLine($"Try connect to the PMS of the hotel: {_config.HotelHost}:{_config.HotelPort}");
+
             Logger.Info($"Try connect to the PMS of the hotel: {_config.HotelHost}:{_config.HotelPort}");
             int atempt = 0;
             while (!HotelPmsClient.IsConnected)
             {
-                //Console.WriteLine($"TCP: pms client try to connect... {++atempt}");
                 Logger.Trace($"TCP: pms client Try to connect ... {++atempt}");
                 HotelPmsClient.Connect(_config.HotelHost, _config.HotelPort);
                 Thread.Sleep(10 * 1000);
@@ -71,8 +71,9 @@ namespace hotel_mini_proxy
                 try
                 {
                     //_clientCert = new X509Certificate2("cert/client.pfx", "tkphbv#1");
-                    _clientCert = new X509Certificate2("cert/client.key");
                     _caCert = X509Certificate.CreateFromCertFile("cert/server.crt");
+                    _clientCert = new X509Certificate2("cert/client.key");
+
                     _clientMqtt = new MqttClient(_config.MqttHost, _config.MqttPort, _config.UseSsl, _caCert, _clientCert, MqttSslProtocols.TLSv1_2);
 
                     _clientMqtt.MqttMsgSubscribed += _clientMqtt_MqttMsgSubscribed;
@@ -80,6 +81,7 @@ namespace hotel_mini_proxy
                     _clientMqtt.ProtocolVersion = MqttProtocolVersion.Version_3_1_1;
 
                 }
+
                 catch (Exception ex)
                 {
                     //Console.WriteLine($"Issues creating MQTT Client{ex.Message}\n{ex.InnerException}");
@@ -93,21 +95,18 @@ namespace hotel_mini_proxy
 
         private static void TryConnect2Mqtt()
         {
-            int atempt = 0;
-
-            //Console.WriteLine("Try to connect to mqtt");
+            var atempt = 0;
             Logger.Info("Try connect to MQTT");
-            var clientId = "hotel_mini_proxy";//Guid.NewGuid().ToString();
+            const string clientId = "hotel_mini_proxy"; //Guid.NewGuid().ToString();
             _clientMqtt.Unsubscribe(new[] { _config.SubscribeTopic });
             while (!_clientMqtt.IsConnected)
             {
-
                 try
                 {
-                    //Console.WriteLine($"MQTT Try to connect... {++atempt}");
                     Logger.Trace($"MQTT Try to connect... {++atempt}, { _config.UserName},{_config.Password}");
-                    Thread.Sleep(30 * 1000);
-                    var code = _config.UseAutorization ? _clientMqtt.Connect(clientId + atempt, _config.UserName, _config.Password, false, 60) : _clientMqtt.Connect(clientId + atempt, null, null, false, 60);
+                    Thread.Sleep(15 * 1000);
+                    //connect to MQTT by SSL or not by Config
+                    var code = _config.UseAutorization ? _clientMqtt.Connect(clientId + atempt, _config.UserName, _config.Password, true, 60) : _clientMqtt.Connect(clientId + atempt, null, null, true, 60);
 
                     //139.162.222.115, MATZI
                     //matzi /
@@ -118,15 +117,13 @@ namespace hotel_mini_proxy
                 {
                     //Console.WriteLine($"{ex.Message}\n {ex.InnerException}\nSleep 30sec");
                     Logger.Error($"{ex}", "Failed connect to MQTT");
-                    Thread.Sleep(30 * 1000);
+                    Thread.Sleep(15 * 1000);
                 }
 
             }
-            //Console.WriteLine("Subscribing to the topic: {0} ", _config.SubscribeTopic);
             Logger.Trace("Subscribing to the topic: {0} ", _config.SubscribeTopic);
-            //logger.Info("Subscribe to the topic: {0} ", _config.SubscribeTopic);
-
             var msgId = _clientMqtt.Subscribe(new[] { _config.SubscribeTopic }, new[] { MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE });
+            Logger.Trace($"Client mqtt subscribed with id {msgId}");
         }
 
         static void Main(string[] args)
@@ -157,7 +154,7 @@ namespace hotel_mini_proxy
             _caCert = X509Certificate.CreateFromCertFile("cert/server.crt");
             //ServicePointManager.ServerCertificateValidationCallback += (s,  certificate, chain, sslPolicyErrors);//=> true;
             //ServicePointManager.ServerCertificateValidationCallback += delegate { return true; };
-            ServicePointManager.ServerCertificateValidationCallback += new RemoteCertificateValidationCallback(ValidateRemoteCertificate);
+            //ServicePointManager.ServerCertificateValidationCallback += new RemoteCertificateValidationCallback(ValidateRemoteCertificate);
             _clientMqtt = new MqttClient(_config.MqttHost, _config.MqttPort, _config.UseSsl, _caCert, _clientCert, MqttSslProtocols.TLSv1_2);
 
             _clientMqtt.MqttMsgSubscribed += _clientMqtt_MqttMsgSubscribed;
@@ -169,45 +166,46 @@ namespace hotel_mini_proxy
         }
 
 
-        private static bool ValidateRemoteCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
-        {
-            return true;
-            //var certificateToValidate = new X509Certificate2(certificate);
+        //private static bool ValidateRemoteCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+        //{
+        //    return true;
+        //    //var certificateToValidate = new X509Certificate2(certificate);
 
-            //chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-            //chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
-            //chain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority; // We have an untrusted root ca certificate
-            //chain.ChainPolicy.VerificationTime = DateTime.Now;
-            //chain.ChainPolicy.UrlRetrievalTimeout = new TimeSpan(0, 0, 0);
+        //    //chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        //    //chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
+        //    //chain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority; // We have an untrusted root ca certificate
+        //    //chain.ChainPolicy.VerificationTime = DateTime.Now;
+        //    //chain.ChainPolicy.UrlRetrievalTimeout = new TimeSpan(0, 0, 0);
 
-            //chain.ChainPolicy.ExtraStore.Add(_clientCert);
-            //bool isChainValid = chain.Build(certificateToValidate);
-            //if (!isChainValid)
-            //{
-            //    string[] errors = chain.ChainStatus
-            //        .Select(x => $"{x.StatusInformation.Trim()} ({x.Status})")
-            //        .ToArray();
+        //    //chain.ChainPolicy.ExtraStore.Add(_clientCert);
+        //    //bool isChainValid = chain.Build(certificateToValidate);
+        //    //if (!isChainValid)
+        //    //{
+        //    //    string[] errors = chain.ChainStatus
+        //    //        .Select(x => $"{x.StatusInformation.Trim()} ({x.Status})")
+        //    //        .ToArray();
 
-            //    string certificateErrorsString = "Unknown errors.";
-            //    if (errors.Length > 0)
-            //    {
-            //        certificateErrorsString = string.Join(", ", errors);
-            //    }
+        //    //    string certificateErrorsString = "Unknown errors.";
+        //    //    if (errors.Length > 0)
+        //    //    {
+        //    //        certificateErrorsString = string.Join(", ", errors);
+        //    //    }
 
-            //    throw new Exception("Trust chain did not complete to the known authority anchor. Errors: " + certificateErrorsString);
-            //}
+        //    //    throw new Exception("Trust chain did not complete to the known authority anchor. Errors: " + certificateErrorsString);
+        //    //}
 
-            //// Check if chain contains our root ca certificate
-            //var valid = chain.ChainElements
-            //    .Cast<X509ChainElement>()
-            //    .Any(x => x.Certificate.Thumbprint == _clientCert.Thumbprint);
+        //    //// Check if chain contains our root ca certificate
+        //    //var valid = chain.ChainElements
+        //    //    .Cast<X509ChainElement>()
+        //    //    .Any(x => x.Certificate.Thumbprint == _clientCert.Thumbprint);
 
-            //return valid;
-        }
+        //    //return valid;
+        //}
 
 
         private static void HotelPmsClient_Disconnect()
         {
+            Logger.Warn("A connect with the hotel's PMS had lost. Try to reconnect");
             Connect2Pms();
         }
 
@@ -340,12 +338,20 @@ namespace hotel_mini_proxy
                     s += ChrOperation.Chr(c);
                 }
             }
-            string[] answers = s.Split(new char[] { ETX }, StringSplitOptions.RemoveEmptyEntries);
+            Logger.Trace($"Received form the hotel's PMS: {s}");
+            ParsePmsAnswer(s);
+        }
+        private static void ParsePmsAnswer(string answerMsg)
+        {
+
+            string[] answers = answerMsg.Split(new char[] { ETX }, StringSplitOptions.RemoveEmptyEntries);
             foreach (var answer in answers)
             {
+
                 List<ParserResult> results = _prot.Parcer($"{answer}{ETX}");
                 foreach (var command in results)
                 {
+                    Logger.Trace($"Pms client received:{answer}: {command.Command}");
                     switch (command.Command)
                     {
                         case Command.Init:
@@ -367,15 +373,14 @@ namespace hotel_mini_proxy
                                 if (command.Ticket >= _config.MqttClientTicketStart)
                                 {
                                     var splited = answer.Trim(STX, ETX).Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
-                                    if (splited[0] == "PS" && _config.Interface == "BestBar")
+                                    //int ticket = command.Ticket - _config.MqttClientTicketStart ?? 0;
+                                    string answ = answer.Trim(STX, ETX);
+                                    if (splited[0] == "PA" && _config.Interface == "BestBar")
                                     {
-                                        _clientMqtt.Publish(_config.PublicTopic,
-                                            splited.Contains("AN")
-                                                ? Encoding.UTF8.GetBytes(answer.Replace("|AN", "|AS").Trim(STX, ETX))
-                                                : Encoding.UTF8.GetBytes(answer.Trim(STX, ETX)),
-                                            MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, true);
+                                        answ = answer.Contains("AN") ? answer.Replace("|AN", "|AS") : answ;
                                     }
-
+                                    _clientMqtt.Publish(_config.PublicTopic, Encoding.UTF8.GetBytes(answ), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, true);
+                                    Logger.Trace($"Sent PS's answer: {answ} to mqtt");
 
                                 }
                                 else
@@ -384,6 +389,7 @@ namespace hotel_mini_proxy
                                     if (HotelListener.Clients.Count > 0)
                                     {
                                         HotelListener.Clients[0].SendData($"{answer}{ETX}");
+                                        Logger.Trace($"Sent PS's answer:{answer} to minibar client");
                                     }
 
 
@@ -394,11 +400,13 @@ namespace hotel_mini_proxy
                             {
                                 //return answer to TCP and Mqtt
                                 _clientMqtt.Publish(_config.PublicTopic, Encoding.UTF8.GetBytes(answer.Trim(STX, ETX)), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, true);
+                                Logger.Trace($"Sent answer: {answer}: to mqtt");
                                 if (HotelListener.Clients.Count > 0)
                                 {
                                     foreach (TcpSocket client in HotelListener.Clients)
                                     {
                                         client.SendData($"{answer}{ETX}");
+                                        Logger.Trace($"Sent answer: {answer} to minibar client");
                                     }
                                 }
 
@@ -407,7 +415,7 @@ namespace hotel_mini_proxy
                     }
 
                     //Console.WriteLine($"Pms client received:{answer}: {command.Command}");
-                    Logger.Trace($"Pms client received:{answer}: {command.Command}");
+
                 }
 
             }
@@ -458,21 +466,35 @@ namespace hotel_mini_proxy
         }
         private static void _clientMqtt_MqttMsgPublishReceived(object sender, MqttMsgPublishEventArgs e)
         {
+            try
+            {
+                var msg = Encoding.UTF8.GetString(e.Message);
+                var s = msg.Trim(STX, ETX).Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
+                if (s[0] == "PS" && _config.Interface == "BestBar")
+                {
+                    var fias = new FiasTcp();
+                    var obj = fias.ParceBilingString(msg);
+                    //obj.ticket += _config.MqttClientTicketStart;
+                    msg = _prot.MakeBillingString(obj);
+                }
+                if (s[0] == "LA")
+                {
+                    _clientMqtt.Publish(_config.PublicTopic, Encoding.UTF8.GetBytes($"{ETX}{msg}{STX}"), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, true);
+                    Logger.Trace($"Sent to Mqtt LA's answer: <ETX>{msg}<ETX>");
+                }
+                if (HotelPmsClient.IsConnected)
+                {
+                    HotelPmsClient.SendData($"{STX}{msg}{ETX}");
+                }
+                //Console.WriteLine($"Received From MQTT (topic:{e.Topic}): {Encoding.UTF8.GetString(e.Message)} and send to PMS: <STX>{msg.Trim(new char[] { ETX, STX })}<ETX>, clientId={_clientMqtt.ClientId}");
+                Logger.Trace($"Received From MQTT (topic:{e.Topic}): {Encoding.UTF8.GetString(e.Message)}\n\t\tSend to PMS: <STX>{msg.Trim(new char[] { ETX, STX })}<ETX>, clientId={_clientMqtt.ClientId}");
 
-            var msg = Encoding.UTF8.GetString(e.Message);
-            var s = msg.Trim(STX, ETX).Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
-            if (s[0] == "PS" && _config.Interface == "BestBar")
-            {
-                var fias = new FiasTcp();
-                var obj = fias.ParceBilingString(msg);
-                msg = _prot.MakeBillingString(obj);
             }
-            if (HotelPmsClient.IsConnected)
+            catch (Exception ex)
             {
-                HotelPmsClient.SendData($"{STX}{msg}{ETX}");
+                Logger.Error($" Error parse incoming MQTT message {ex.Message}\n\t\t {ex.Data}");
             }
-            //Console.WriteLine($"Received From MQTT (topic:{e.Topic}): {Encoding.UTF8.GetString(e.Message)} and send to PMS: <STX>{msg.Trim(new char[] { ETX, STX })}<ETX>, clientId={_clientMqtt.ClientId}");
-            Logger.Trace($"Received From MQTT (topic:{e.Topic}): {Encoding.UTF8.GetString(e.Message)}\n\t\tSend to PMS: <STX>{msg.Trim(new char[] { ETX, STX })}<ETX>, clientId={_clientMqtt.ClientId}");
+
 
         }
 

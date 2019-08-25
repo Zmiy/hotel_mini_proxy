@@ -12,12 +12,12 @@
   "mqttGroupId": "gate",
   "mqttPlaceId": "hotel_n",
   "hotelClientOptions": {
-    "hotelHost": "128.0.0.11",
+    "hotelHost": "192.168.1.14",
     "hotelPort": 1011,
-    "interface": "Homi"
+    "interface": "BestBar"
   },
   "tcpListener": {
     "listenerPort": 25009
   },
-  "MqttClientTicketStart": 10000000
+  "MqttClientTicketStart": 1000
 }

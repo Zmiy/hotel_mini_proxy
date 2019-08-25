@@ -58,6 +58,7 @@ namespace hotel_mini_proxy.PmsInterface
         public StringBuilder InitString => InitRoutine.GetInit();
         public abstract string GetInitRequestString();
         public abstract string MakeBillingString(InvoiceObject obj);
+
         public abstract List<ParserResult> Parcer(string str);
     }
 }

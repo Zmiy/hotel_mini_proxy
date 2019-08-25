@@ -29,7 +29,7 @@ namespace hotel_mini_proxy.PmsInterface
         private static string BuildBillingString(InvoiceObject obj)
         {
             var bill =
-                $"PS|DA{Fdate()}|PTC|RN{obj.roomN}|P#{obj.ticket:00000000}|TA{obj.price}|TI{Ftime()}|CT{obj.productName}|";
+                $"PS|DA{Fdate()}|PTC|RN{obj.roomN}|P#{obj.ticket}|TA{obj.price}|TI{Ftime()}|CT{obj.productName}|";
             return bill;
         }
 
