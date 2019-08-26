@@ -12,12 +12,22 @@
   "mqttGroupId": "gate",
   "mqttPlaceId": "hotel_n",
   "hotelClientOptions": {
-    "hotelHost": "192.168.1.14",
+    "hotelHost": "192.168.1.26",
     "hotelPort": 1011,
     "interface": "BestBar"
   },
   "tcpListener": {
     "listenerPort": 25009
   },
-  "MqttClientTicketStart": 1000
+  "MqttClientTicketStart": 1000,
+  "smtpMailOptions": {
+    "HotelName": "HomeOffice",
+    "SenderEmail": "driverirf@gmail.com",
+    "EnableSsl": true,
+    "SMTPServer": "smtp.gmail.com",
+    "SMTPUser": "driverirf@gmail.com",
+    "SMTPPort": 587,
+    "SMTPPassword": "1homimntc9",
+    "SendTo": "evgeny@3pi-solutions.com"
+  }
 }

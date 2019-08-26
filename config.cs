@@ -12,6 +12,16 @@ namespace hotel_mini_proxy
         internal int ListenerPort { get; private set; }
         internal int MqttClientTicketStart { get; private set; }
         internal string Interface { get; private set; }
+
+        internal string HotelName { get; private set; }
+        internal string SenderEmail { get; private set; }
+        internal bool EnableSsl { get; private set; }
+        internal string SmtpServer { get; private set; }
+        internal string SmtpUser { get; private set; }
+        internal int SmtpPort { get; private set; }
+        internal string SmtpPassword { get; private set; }
+        internal string SendTo { get; private set; }
+
         private readonly bool? _useSsl;
         private readonly bool? _useAutorization;
         private readonly string _userName;
@@ -43,6 +53,14 @@ namespace hotel_mini_proxy
                 this.MqttClientTicketStart = config["MqttClientTicketStart"]; //Min ticket number of MQTT client
                 this.Interface = config["hotelClientOptions"]["interface"];
 
+                this.HotelName = config["smtpMailOptions"]["HotelName"];
+                this.SenderEmail = config["smtpMailOptions"]["SenderEmail"];
+                this.EnableSsl = config["smtpMailOptions"]["EnableSsl"];
+                this.SmtpServer = config["smtpMailOptions"]["SMTPServer"];
+                this.SmtpPort = config["smtpMailOptions"]["SMTPPort"];
+                this.SmtpUser = config["smtpMailOptions"]["SMTPUser"];
+                this.SmtpPassword = config["smtpMailOptions"]["SMTPPassword"];
+                this.SendTo = config["smtpMailOptions"]["SendTo"];
             }
         }
 
