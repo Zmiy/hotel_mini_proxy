@@ -12,7 +12,7 @@
   "mqttGroupId": "gate",
   "mqttPlaceId": "hotel_n",
   "hotelClientOptions": {
-    "hotelHost": "192.168.1.26",
+    "hotelHost": "evgeny-dell-pc",
     "hotelPort": 1011,
     "interface": "BestBar"
   },

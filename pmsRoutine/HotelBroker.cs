@@ -26,7 +26,7 @@ namespace hotel_mini_proxy.pmsRoutine
         public delegate void SendDataToPmsEventHandler(object sender, SendDataToPmsEventArgs e);
 
         public event SendDataToPmsEventHandler messageForPms;
-        HotelBroker(Config config, Logger logger, Protocol protocol)
+        public HotelBroker(Config config, Logger logger, Protocol protocol)
         {
             _config = config;
             _logger = logger;
@@ -115,12 +115,13 @@ namespace hotel_mini_proxy.pmsRoutine
             return DateTime.Now.ToString("hhmmss");
         }
 
-        private void SendData(string message, string descrMessage2Pms)
+        private void SendToHotel(string message, string descrMessage2Pms)
         {
             if (_hotelListener.Clients.Count > 0)
             {
-                _logger.Info("Send {descrMessage2Pms}'s message for the hotel: {message2Pms} ");
+
                 _hotelListener.Clients[0].SendData(message);
+                _logger.Info($"Sent {descrMessage2Pms}'s message for the hotel: {message} ");
             }
 
         }
@@ -142,6 +143,18 @@ namespace hotel_mini_proxy.pmsRoutine
                 messageForPms(this, e);
             }
         }
+
+        public void SendData(string message)
+        {
+            if (_hotelListener.Clients.Count > 0)
+            {
+                _logger.Trace($"Sending a PS's answer:{message} to the minibar client");
+                _hotelListener.Clients[0].SendData(message);
+
+            }
+
+        }
+
         /// <summary>
         /// Parse message from a hotel side, suitable answer to back or forward message to the PMS
         /// </summary>
@@ -158,14 +171,14 @@ namespace hotel_mini_proxy.pmsRoutine
             {
                 case "LS":
                     {
-                        SendData($"{STX}LS|DA{Fdate()}|TI{Ftime()}|{ETX}", s[0]);
+                        SendToHotel($"{STX}LS|DA{Fdate()}|TI{Ftime()}|{ETX}", s[0]);
 
                         break;
                     }
 
                 case "LA":
                     {
-                        SendData($"{STX}LA|DA{Fdate()}|TI{Ftime()}|{ETX}", s[0]);
+                        SendToHotel($"{STX}LA|DA{Fdate()}|TI{Ftime()}|{ETX}", s[0]);
                         break;
                     }
 

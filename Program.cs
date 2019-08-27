@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using hotel_mini_proxy.PmsInterface;
 using hotel_mini_proxy.mail;
+using hotel_mini_proxy.pmsRoutine;
 using NLog;
 using uPLibrary.Networking.M2Mqtt;
 using uPLibrary.Networking.M2Mqtt.Messages;
@@ -25,7 +26,8 @@ namespace hotel_mini_proxy
         private static X509Certificate2 _clientCert;
         private static X509Certificate _caCert;
         public static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-
+        private static PmsBroker _pmsBroker;
+        private static HotelBroker _hotelBroker;
         private static void Connect2Mqtt()
         {
             //Task tsk = new Task(TryConnect2Mqtt);
@@ -43,8 +45,8 @@ namespace hotel_mini_proxy
                 try
                 {
                     //_clientCert = new X509Certificate2("cert/client.pfx", "tkphbv#1");
-                    _caCert = X509Certificate.CreateFromCertFile("cert/server.crt");
-                    _clientCert = new X509Certificate2("cert/client.key");
+                    _caCert = null;//X509Certificate.CreateFromCertFile("cert/server.crt");
+                    _clientCert = null;//new X509Certificate2("cert/client.key");
 
                     _clientMqtt = new MqttClient(Config.MqttHost, Config.MqttPort, Config.UseSsl, _caCert, _clientCert, MqttSslProtocols.TLSv1_2);
 
@@ -104,20 +106,27 @@ namespace hotel_mini_proxy
             Logger.Info("------------Started------------");
             Config = new Config(); //read a configuration info
             //Client to PMS
-            HotelPmsClient.Connected += pmsRoutine.PmsRoutine.HotelPmsClient_Connected;
-            HotelPmsClient.DataArrival += pmsRoutine.PmsRoutine.HotelPmsClient_DataArrival;
-            HotelPmsClient.Disconnect += pmsRoutine.PmsRoutine.HotelPmsClient_Disconnect;
-            //HotelPmsClient.Connect(_config.HotelHost, _config.HotelPort);
-            pmsRoutine.PmsRoutine.Connect2Pms();
-
+            //HotelPmsClient.Connected += pmsRoutine.PmsRoutine.HotelPmsClient_Connected;
+            //HotelPmsClient.DataArrival += pmsRoutine.PmsRoutine.HotelPmsClient_DataArrival;
+            //HotelPmsClient.Disconnect += pmsRoutine.PmsRoutine.HotelPmsClient_Disconnect;
+            ////HotelPmsClient.Connect(_config.HotelHost, _config.HotelPort);
+            //pmsRoutine.PmsRoutine.Connect2Pms();
+            _pmsBroker = new PmsBroker(Config, Logger, Prot);
+            _pmsBroker.Connect2Pms();
+            _pmsBroker.MqttAnswer += PmsBroker_MqttAnswer;
+            _pmsBroker.HotelAnswer += PmsBroker_HotelAnswer;
             // Listener for hotel 
-            HotelListener.DataArrival += pmsRoutine.PmsRoutine._hotelListener_DataArrival;
-            HotelListener.Connected += pmsRoutine.PmsRoutine._hotelListener_Connected;
-            IPAddress ipListener = IPAddress.Any;//LocalIpAddress();
-            HotelListener.Port(ipListener, Config.ListenerPort);
-            HotelListener.StartListen();
+            _hotelBroker = new HotelBroker(Config, Logger, Prot);
+            _hotelBroker.ListenHotelRequests();
+            _hotelBroker.messageForPms += _hotelBroker_messageForPms;
+            //HotelListener.DataArrival += pmsRoutine.PmsRoutine._hotelListener_DataArrival;
+            //HotelListener.Connected += pmsRoutine.PmsRoutine._hotelListener_Connected;
+            //IPAddress ipListener = IPAddress.Any;//LocalIpAddress();
+
+            //HotelListener.Port(ipListener, Config.ListenerPort);
+            //HotelListener.StartListen();
             //Console.WriteLine("Start listening on {0}:{1}", ipListener, _config.ListenerPort);
-            Logger.Info("Start listening on {0}:{1}", ipListener, Config.ListenerPort);
+
 
             //MQTT connect
             //_clientCert = new X509Certificate2("cert/client2048.pfx", "tkphbv#1");
@@ -132,6 +141,29 @@ namespace hotel_mini_proxy
             Connect2Mqtt();
 
             //Console.WriteLine("End Of main");
+        }
+
+        private static void _hotelBroker_messageForPms(object sender, SendDataToPmsEventArgs e)
+        {
+            Logger.Info($"Sending a {e.descrMessage}'s answer to the hotel broker");
+            _pmsBroker.SendToPms(e.message);
+        }
+
+        private static void PmsBroker_HotelAnswer(object sender, AnswerEventArgs e)
+        {
+            Logger.Info($"Sending a {e.DescrAnswer}'s answer to the hotel broker");
+            _hotelBroker.SendData(e.Answer);
+        }
+
+        private static void PmsBroker_MqttAnswer(object sender, AnswerEventArgs e)
+        {
+            if (_clientMqtt.IsConnected)
+            {
+                Logger.Info($"Sending a {e.DescrAnswer}'s answer to MQTT broker");
+                _clientMqtt.Publish(Config.PublicTopic, Encoding.UTF8.GetBytes($"{ETX}{e.Answer}{STX}"),
+                    MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, true);
+            }
+
         }
 
 
