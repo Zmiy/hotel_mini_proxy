@@ -14,8 +14,7 @@ namespace hotel_mini_proxy.pmsRoutine
     public class AnswerEventArgs : EventArgs
     {
         public string Answer { get; set; }
-        public DateTime Date { get; set; }
-        public string DescrAnswer { get; set; }
+        public string TypeOfAnswer { get; set; }
     }
 
     class PmsBroker
@@ -25,9 +24,11 @@ namespace hotel_mini_proxy.pmsRoutine
         public event AnswerForBrockerHandler HotelAnswer;
         public event AnswerForBrockerHandler MqttAnswer;
         private readonly Logger _logger;
-        private TcpClient _hotelPmsClient = new TcpClient();
+        private readonly TcpClient _hotelPmsClient = new TcpClient();
         private readonly Config _config;
-        private Protocol _prot;
+        private readonly Protocol _prot;
+
+        private static readonly Logger LoggerBilling = LogManager.GetLogger("Billing");
 
         public PmsBroker(Config config, Logger logger, Protocol protocol)
         {
@@ -62,25 +63,6 @@ namespace hotel_mini_proxy.pmsRoutine
         private bool _fiasConnectionEstablished;
         private void _hotelPmsClient_Connected()
         {
-            switch (_config.Interface)
-            {
-                case "BestBar":
-                    {
-                        _prot = new BestBar();
-                        break;
-                    }
-                case "Homi":
-                    {
-                        _prot = new FiasTcp();
-                        break;
-                    }
-                default:
-                    {
-                        _prot = new FiasTcp();
-                        break;
-                    }
-            }
-
             Thread.Sleep(5100);
             _fiasConnectionEstablished = false;
             if (!_fiasConnectionEstablished)
@@ -136,6 +118,7 @@ namespace hotel_mini_proxy.pmsRoutine
                                 {
                                     if (command.Ticket >= _config.MqttClientTicketStart)
                                     {
+                                        LoggerBilling.Info($"PE answer for the MQTT's broker: {answer}");
                                         var splited = answer.Trim(STX, ETX).Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
                                         //int ticket = command.Ticket - _config.MqttClientTicketStart ?? 0;
                                         string answ = answer.Trim(STX, ETX);
@@ -145,12 +128,12 @@ namespace hotel_mini_proxy.pmsRoutine
                                         }
                                         if (MqttAnswer != null)
                                         {
-                                            _logger.Trace($"Fired {command.Command}'s answer: {$"{STX}|{answ}{ETX}"} to mqtt");
+                                            LoggerBilling.Trace($"Fire {command.Command}'s answer: {$"{STX}|{answ}{ETX}"} to mqtt");
+                                            _logger.Trace($"Fire {command.Command}'s answer: {$"{STX}|{answ}{ETX}"} to mqtt");
                                             AnswerEventArgs e = new AnswerEventArgs()
                                             {
                                                 Answer = $"{STX}|{answ}{ETX}",
-                                                Date = DateTime.Now,
-                                                DescrAnswer = command.Command.ToString()
+                                                TypeOfAnswer = command.Command.ToString()
                                             };
                                             MqttAnswer(this, e);
                                         }
@@ -162,12 +145,12 @@ namespace hotel_mini_proxy.pmsRoutine
                                     {
                                         if (HotelAnswer != null)
                                         {
-                                            _logger.Trace($"Fired {command.Command}'s answer:{$"{answer}{ETX}"} to minibar client");
+                                            LoggerBilling.Info($"Fire {command.Command}'s answer:{$"{answer}{ETX}"} to minibar client");
+                                            _logger.Trace($"Fire {command.Command}'s answer:{$"{answer}{ETX}"} to minibar client");
                                             AnswerEventArgs e = new AnswerEventArgs()
                                             {
                                                 Answer = $"{answer}{ETX}",
-                                                Date = DateTime.Now,
-                                                DescrAnswer = command.Command.ToString()
+                                                TypeOfAnswer = command.Command.ToString()
                                             };
                                             HotelAnswer(this, e);
 
@@ -179,23 +162,21 @@ namespace hotel_mini_proxy.pmsRoutine
                                 {//return answer to TCP and Mqtt
                                     if (HotelAnswer != null)
                                     {
-                                        _logger.Trace($"Fired {command.Command}'s answer:{$"{answer}{ETX}"} to minibar client");
+                                        _logger.Trace($"Fire {command.Command}'s answer:{$"{answer}{ETX}"} to minibar client");
                                         AnswerEventArgs e = new AnswerEventArgs()
                                         {
                                             Answer = $"{answer}{ETX}",
-                                            Date = DateTime.Now,
-                                            DescrAnswer = command.Command.ToString()
+                                            TypeOfAnswer = command.Command.ToString()
                                         };
                                         HotelAnswer(this, e);
                                     }
                                     if (MqttAnswer != null)
                                     {
-                                        _logger.Trace($"Fired {command.Command}'s answer: {$"{answer}{ETX}"} to mqtt");
+                                        _logger.Trace($"Fire {command.Command}'s answer: {$"{answer}{ETX}"} to mqtt");
                                         AnswerEventArgs e = new AnswerEventArgs()
                                         {
                                             Answer = $"{answer}{ETX}",
-                                            Date = DateTime.Now,
-                                            DescrAnswer = command.Command.ToString()
+                                            TypeOfAnswer = command.Command.ToString()
                                         };
                                         MqttAnswer(this, e);
                                     }

@@ -84,13 +84,13 @@
   <ItemGroup>
     <Compile Include="config.cs" />
     <Compile Include="mail\smtpmail.cs" />
+    <Compile Include="mqttRoutine\MqttBroker.cs" />
     <Compile Include="pmsInterface\BestBar.cs" />
     <Compile Include="pmsInterface\FiasTCP.cs" />
     <Compile Include="pmsInterface\IInitNecessity.cs" />
     <Compile Include="pmsInterface\InitRoutine.cs" />
     <Compile Include="pmsRoutine\HotelBroker.cs" />
     <Compile Include="pmsRoutine\PmsBroker.cs" />
-    <Compile Include="pmsRoutine\pmsRoutine.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="pmsInterface\Protocol.cs" />

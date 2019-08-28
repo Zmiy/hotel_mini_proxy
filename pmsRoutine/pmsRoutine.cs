@@ -1,14 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using hotel_mini_proxy.mail;
 using hotel_mini_proxy.PmsInterface;
 using hotel_mini_proxy.Tools;
-using NLog;
 using TcpLibrary;
 using uPLibrary.Networking.M2Mqtt.Messages;
 using static hotel_mini_proxy.Tools.ChrOperation;

@@ -1,9 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
-using System.Text;
-using System.Threading.Tasks;
 using hotel_mini_proxy.PmsInterface;
 using NLog;
 using TcpLibrary;
@@ -13,8 +9,8 @@ namespace hotel_mini_proxy.pmsRoutine
 {
     public class SendDataToPmsEventArgs : EventArgs
     {
-        public string message { get; internal set; }
-        public string descrMessage { get; internal set; }
+        public string Message { get; internal set; }
+        public string TypeOfMessage { get; internal set; }
     }
 
     class HotelBroker
@@ -24,8 +20,10 @@ namespace hotel_mini_proxy.pmsRoutine
         private readonly Config _config;
         private Protocol _prot;
         public delegate void SendDataToPmsEventHandler(object sender, SendDataToPmsEventArgs e);
+        private static readonly Logger LoggerBilling = LogManager.GetLogger("Billing");
 
-        public event SendDataToPmsEventHandler messageForPms;
+        public event SendDataToPmsEventHandler MessageForPms;
+
         public HotelBroker(Config config, Logger logger, Protocol protocol)
         {
             _config = config;
@@ -128,23 +126,23 @@ namespace hotel_mini_proxy.pmsRoutine
         /// <summary>
         /// fire event for send message to the pms
         /// </summary>
-        /// <param name="messag2Pms">message to pms</param>
-        /// <param name="descrMessage2Pms">describe of type of message</param>
-        private void FirePmsMessage(string messag2Pms, string descrMessage2Pms)
+        /// <param name="message2Pms">message to pms</param>
+        /// <param name="typeMessage4Pms">describe of type of message</param>
+        private void FirePmsMessage(string message2Pms, string typeMessage4Pms)
         {
-            if (messageForPms != null)
+            if (MessageForPms != null)
             {
-                _logger.Info("Fire {descrMessage2Pms}'s message for the PMS: {message2Pms} ");
+                _logger.Info($"Fire {typeMessage4Pms}'s message for the PMS: {message2Pms} ");
                 SendDataToPmsEventArgs e = new SendDataToPmsEventArgs()
                 {
-                    message = messag2Pms,
-                    descrMessage = descrMessage2Pms
+                    Message = message2Pms,
+                    TypeOfMessage = typeMessage4Pms
                 };
-                messageForPms(this, e);
+                MessageForPms(this, e);
             }
         }
 
-        public void SendData(string message)
+        public void SendToHotel(string message)
         {
             if (_hotelListener.Clients.Count > 0)
             {
@@ -184,6 +182,7 @@ namespace hotel_mini_proxy.pmsRoutine
 
                 case "PS":
                     {
+                        LoggerBilling.Info($"Sending bill to the PMS:\n\t{mess}");
                         FirePmsMessage(mess, s[0]);
                         break;
                     }
