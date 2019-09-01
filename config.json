@@ -1,9 +1,9 @@
 {
   "mqttClientOptions": {
-    "port": 443,
-    "host": "mqtt.wigidex.com",
+    "port": 39001,
+    "host": "mqtts.3pi-solutions.com",
     "useSsl": true,
-    "useAutorization": true,
+    "useAutorization": false,
     "userName": "rothschild22",
     "password": "rothschild22!pass"
   },

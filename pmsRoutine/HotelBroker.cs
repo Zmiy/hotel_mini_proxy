@@ -15,19 +15,19 @@ namespace hotel_mini_proxy.pmsRoutine
 
     class HotelBroker
     {
-        private readonly Logger _logger;
+        //private readonly Logger _logger;
         private readonly TcpServer _hotelListener = new TcpServer();
         private readonly Config _config;
         private Protocol _prot;
         public delegate void SendDataToPmsEventHandler(object sender, SendDataToPmsEventArgs e);
-        private static readonly Logger LoggerBilling = LogManager.GetLogger("Billing");
-
+        private static readonly Logger BillingLogger = LogManager.GetLogger("Billing Hotel Broker");
+        private static readonly Logger HotelLogger = LogManager.GetLogger("Hotel Broker");
         public event SendDataToPmsEventHandler MessageForPms;
 
         public HotelBroker(Config config, Logger logger, Protocol protocol)
         {
             _config = config;
-            _logger = logger;
+            //_logger = logger;
             _prot = protocol;
         }
 
@@ -39,12 +39,12 @@ namespace hotel_mini_proxy.pmsRoutine
             _hotelListener.Port(ipListener, _config.ListenerPort);
             _hotelListener.StartListen();
 
-            _logger.Info("Start listening on {0}:{1}", ipListener, _config.ListenerPort);
+            HotelLogger.Info("Start listening on {0}:{1}", ipListener, _config.ListenerPort);
         }
 
         private void _hotelListener_Connected(TcpSocket client)
         {
-            _logger.Trace("Hotel Listener: client ({0}) connected", client.Tag);
+            HotelLogger.Trace("Hotel Listener: client ({0}) connected", client.Tag);
         }
 
         private void _hotelListener_DataArrival(TcpSocket client, long available)
@@ -100,7 +100,7 @@ namespace hotel_mini_proxy.pmsRoutine
             } while (client.BytesAvailable != 0);
 
             var logMessage = (trame.Length == 1 & trame.Equals("6")) ? "<Ask>" : $"<STX>{trame.Trim(new char[] { STX, ETX })}<ETX>";
-            _logger.Info($"Received from minibar client: {logMessage}");
+            HotelLogger.Info($" Received from minibar client: {logMessage}");
             ParseMessageFromHotelSide(trame);
         }
 
@@ -113,13 +113,28 @@ namespace hotel_mini_proxy.pmsRoutine
             return DateTime.Now.ToString("hhmmss");
         }
 
+        public void SendToHotel(string message)
+        {
+            if (_hotelListener.Clients.Count > 0 /*&& _hotelListener.IsListening*/)
+            {
+                if (message.Contains("PA"))
+                {
+                    BillingLogger.Info($"Sent PA's answer <STX>{message.Trim(STX, ETX)}<ETX> from the PMS to the minibar's client");
+                }
+                HotelLogger.Trace($"Sent a PMS's message:{message} to the minibar client");
+                _hotelListener.Clients[0].SendData(message);
+
+            }
+
+        }
+
         private void SendToHotel(string message, string descrMessage2Pms)
         {
             if (_hotelListener.Clients.Count > 0)
             {
 
                 _hotelListener.Clients[0].SendData(message);
-                _logger.Info($"Sent {descrMessage2Pms}'s message for the hotel: {message} ");
+                HotelLogger.Info($"Sent {descrMessage2Pms}'s message for the hotel: {message} ");
             }
 
         }
@@ -132,7 +147,7 @@ namespace hotel_mini_proxy.pmsRoutine
         {
             if (MessageForPms != null)
             {
-                _logger.Info($"Fire {typeMessage4Pms}'s message for the PMS: {message2Pms} ");
+                HotelLogger.Info($"Fire {typeMessage4Pms}'s message for the PMS: {message2Pms} ");
                 SendDataToPmsEventArgs e = new SendDataToPmsEventArgs()
                 {
                     Message = message2Pms,
@@ -142,16 +157,7 @@ namespace hotel_mini_proxy.pmsRoutine
             }
         }
 
-        public void SendToHotel(string message)
-        {
-            if (_hotelListener.Clients.Count > 0)
-            {
-                _logger.Trace($"Sending a PS's answer:{message} to the minibar client");
-                _hotelListener.Clients[0].SendData(message);
 
-            }
-
-        }
 
         /// <summary>
         /// Parse message from a hotel side, suitable answer to back or forward message to the PMS
@@ -182,7 +188,7 @@ namespace hotel_mini_proxy.pmsRoutine
 
                 case "PS":
                     {
-                        LoggerBilling.Info($"Sending bill to the PMS:\n\t{mess}");
+                        BillingLogger.Info($"Sending bill to the PMS:{mess}");
                         FirePmsMessage(mess, s[0]);
                         break;
                     }

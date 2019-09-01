@@ -23,17 +23,18 @@ namespace hotel_mini_proxy.mqttRoutine
 
         public event MessageToPmsHandler MqttToPms;
 
-        private readonly Logger _logger;
+        //private readonly Logger _logger;
         private MqttClient _clientMqtt;
         private readonly Config _config;
         private readonly Protocol _prot;
         private X509Certificate2 _clientCert;
         private X509Certificate _caCert;
-        private static readonly Logger LoggerBilling = LogManager.GetLogger("Billing");
+        private static readonly Logger BillingLogger = LogManager.GetLogger("Billing Mqtt Broker");
+        private static readonly Logger MqttLogger = LogManager.GetLogger("Mqtt Broker");
         public MqttBroker(Config config, Logger logger, Protocol protocol)
         {
             _config = config;
-            _logger = logger;
+            //_logger = logger;
             _prot = protocol;
         }
 
@@ -67,8 +68,7 @@ namespace hotel_mini_proxy.mqttRoutine
 
                 catch (Exception ex)
                 {
-                    //Console.WriteLine($"Issues creating MQTT Client{ex.Message}\n{ex.InnerException}");
-                    _logger.Error($"Issues creating MQTT Client{ex.Message}\n{ex.InnerException}");
+                    MqttLogger.Error($"Issues creating MQTT Client{ex.Message}\n{ex.InnerException}");
                     Thread.Sleep(30 * 1000);
                 }
             }
@@ -79,34 +79,34 @@ namespace hotel_mini_proxy.mqttRoutine
         private void TryConnect2Mqtt()
         {
             var atempt = 0;
-            _logger.Info("Try connect to MQTT");
-            const string clientId = "hotel_mini_proxy"; //Guid.NewGuid().ToString();
+            MqttLogger.Info("Try connect to MQTT");
+            string clientId = $"hotel_proxy_{Guid.NewGuid()}"; //Guid.NewGuid().ToString();
             _clientMqtt.Unsubscribe(new[] { _config.SubscribeTopic });
             while (!_clientMqtt.IsConnected)
             {
                 try
                 {
-                    _logger.Trace($"MQTT Try to connect... {++atempt}, { _config.UserName},{_config.Password}");
+                    MqttLogger.Trace($"MQTT Try to connect... {++atempt}, { _config.UserName},{_config.Password}");
                     Thread.Sleep(15 * 1000);
                     //connect to MQTT by SSL or not by Config
                     var code = _config.UseAutorization ? _clientMqtt.Connect(clientId + atempt, _config.UserName, _config.Password, true, 60) : _clientMqtt.Connect(clientId + atempt, null, null, true, 60);
 
                     //139.162.222.115, MATZI
                     //matzi /
-                    _logger.Info($"connection code: {code}");
+                    MqttLogger.Info($"Connection code: {code}");
                 }
 
                 catch (Exception ex)
                 {
                     //Console.WriteLine($"{ex.Message}\n {ex.InnerException}\nSleep 30sec");
-                    _logger.Error($"{ex}", "Failed connect to MQTT");
+                    MqttLogger.Error($"{ex}", "Failed connect to MQTT");
                     Thread.Sleep(15 * 1000);
                 }
 
             }
-            _logger.Trace("Subscribing to the topic: {0} ", _config.SubscribeTopic);
+            MqttLogger.Trace("Subscribing to the topic: {0} ", _config.SubscribeTopic);
             var msgId = _clientMqtt.Subscribe(new[] { _config.SubscribeTopic }, new[] { MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE });
-            _logger.Trace($"Client mqtt subscribed with id {msgId}");
+            MqttLogger.Trace($"Client mqtt subscribed with id {msgId}");
         }
 
         private void _clientMqtt_ConnectionClosed(object sender, EventArgs e)
@@ -117,7 +117,7 @@ namespace hotel_mini_proxy.mqttRoutine
             };
 
             mail.SendMail();
-            _logger.Warn("--------MQTT Connection closed-----------");
+            MqttLogger.Warn("--------MQTT Connection closed-----------");
             _clientMqtt.Unsubscribe(new string[] { _config.SubscribeTopic });
             _clientMqtt = null;
             Connect2Mqtt();
@@ -129,7 +129,7 @@ namespace hotel_mini_proxy.mqttRoutine
             {
                 var msg = Encoding.UTF8.GetString(e.Message).Trim(STX, ETX);
                 var s = msg.Trim(STX, ETX).Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
-                _logger.Trace($"Received From MQTT (topic:{e.Topic}): {Encoding.UTF8.GetString(e.Message)}, clientId={_clientMqtt.ClientId}");
+                MqttLogger.Trace($"Received From MQTT (topic:{e.Topic}): <STX>{msg}<ETX>, clientId={_clientMqtt.ClientId}");
                 switch (s[0])
                 {
 
@@ -139,18 +139,18 @@ namespace hotel_mini_proxy.mqttRoutine
                         {
                             var fias = new FiasTcp();
                             var obj = fias.ParceBilingString(msg);
-                            msg = _prot.MakeBillingString(obj);
+                            msg = _prot.MakeBillingString(obj).Trim(STX, ETX);
                         }
-                        LoggerBilling.Trace($"Fire PS's message: {$"{STX}|{msg}{ETX}"} to the PMS");
+                        BillingLogger.Info($"Fire PS's message: {$"{STX}{msg}{ETX}"} to the PMS");
                         break;
                     case "LA":
                         _clientMqtt.Publish(_config.PublicTopic, Encoding.UTF8.GetBytes($"{STX}{msg}{ETX}"), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, true);
-                        _logger.Trace($"Sent LA's answer to Mqtt: <STX>{msg}<ETX>");
+                        MqttLogger.Trace($"Sent LA's answer to Mqtt: <STX>{msg}<ETX>");
                         break;
                 }
                 if (MqttToPms != null)
                 {
-                    _logger.Info($"Fire message from MQTT: <STX>{msg}<ETX> to the PMS");
+                    MqttLogger.Info($"Fire message: <STX>{msg}<ETX> to the PMS");
                     MessageToPmsEventArgs ev = new MessageToPmsEventArgs()
                     {
                         Message = $"{STX}{msg}{ETX}"
@@ -161,7 +161,7 @@ namespace hotel_mini_proxy.mqttRoutine
             }
             catch (Exception ex)
             {
-                _logger.Error($" Error parse incoming MQTT message {ex.Message}\n\t\t {ex.Data}");
+                MqttLogger.Error($"Error parse incoming MQTT message {ex.Message}\n\t\t {ex.Data}");
             }
 
 
@@ -169,14 +169,18 @@ namespace hotel_mini_proxy.mqttRoutine
 
         public void SendToMqtt(string message)
         {
+            if (message.Contains("|PA|"))
+            {
+                BillingLogger.Info($"Send PA's answer: <STX>{message.Trim(STX, ETX)}<ETX> to the MQTT brocker");
+            }
             _clientMqtt.Publish(_config.PublicTopic, Encoding.UTF8.GetBytes($"{message}"), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, true);
-            _logger.Trace($"Sent message from PMS to Mqtt: <STX>{message.Trim(STX, ETX)}<ETX>");
+            MqttLogger.Trace($"Sent message from PMS to Mqtt: <STX>{message.Trim(STX, ETX)}<ETX>");
         }
 
         //subscribed to MQTT
         private void _clientMqtt_MqttMsgSubscribed(object sender, MqttMsgSubscribedEventArgs e)
         {
-            _logger.Trace($"Subscribed To Mqtt Broker {_clientMqtt.WillTopic}, {e.MessageId}");
+            MqttLogger.Trace($"Subscribed To Mqtt Broker {_clientMqtt.WillTopic}, {e.MessageId}");
             _clientMqtt.MqttMsgPublishReceived += _clientMqtt_MqttMsgPublishReceived;
             _clientMqtt.MqttMsgPublished += _clientMqtt_MqttMsgPublished;
             _clientMqtt.MqttMsgUnsubscribed += _clientMqtt_MqttMsgUnsubscribed;
@@ -185,12 +189,12 @@ namespace hotel_mini_proxy.mqttRoutine
 
         private void _clientMqtt_MqttMsgUnsubscribed(object sender, MqttMsgUnsubscribedEventArgs e)
         {
-            _logger.Warn("MQTT client unsubscribed");
+            MqttLogger.Warn("MQTT client unsubscribed");
         }
 
         private void _clientMqtt_MqttMsgPublished(object sender, MqttMsgPublishedEventArgs e)
         {
-            _logger.Trace($"MQTT client: Mesage sent = {e.MessageId}, messageId:{e.MessageId}");
+            MqttLogger.Trace($"MQTT client: messageId:{e.MessageId}");
         }
 
     }

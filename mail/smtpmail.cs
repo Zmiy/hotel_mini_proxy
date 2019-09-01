@@ -6,13 +6,14 @@ using System.Text;
 using System.Net;
 using System.Net.Mail;
 using System.Net.Mime;
+using NLog;
 
 
 namespace hotel_mini_proxy.mail
 {
     class Smtpmail
     {
-
+        private static readonly Logger SmtpRoutinLogger = LogManager.GetLogger("Smtp mailing routine");
         public class MyAttachment : Attachment, IDisposable
         {
             private readonly string _fn;
@@ -139,7 +140,7 @@ namespace hotel_mini_proxy.mail
                 var token = new MyToken();
                 if (_mailList == null)
                 {
-                    Program.Logger.Error("List of mail recepients is empty ");
+                    SmtpRoutinLogger.Error("List of mail recepients is empty ");
                     return;
                 }
                 try
@@ -193,7 +194,7 @@ namespace hotel_mini_proxy.mail
                     if (_numberOfAttemps > 0)
                     {
                         var innerMsg = ex.InnerException == null ? string.Empty : ex.InnerException.Message;
-                        Program.Logger.Error($"{ _numberOfAttemps} Issues of sending mail: {ex.Message} {innerMsg}");
+                        SmtpRoutinLogger.Error($"{ _numberOfAttemps} Issues of sending mail: {ex.Message} {innerMsg}");
 
                         if (ex.StatusCode == SmtpStatusCode.GeneralFailure)
                         {
@@ -208,12 +209,12 @@ namespace hotel_mini_proxy.mail
             {
                 if (e.Error != null)
                 {
-                    Program.Logger.Error($"Send message error:   {e.Error.Message}\n\t\t\t target: {e.Error.TargetSite}\n\t\t\t source: {e.Error.Source}\n\t\t\t " +
+                    SmtpRoutinLogger.Error($"Send message error:   {e.Error.Message}\n\t\t\t target: {e.Error.TargetSite}\n\t\t\t source: {e.Error.Source}\n\t\t\t " +
                                          $"innerExeption {(e.Error.InnerException != null ? e.Error.InnerException.Message : "")}");
                 }
                 else
                 {
-                    Program.Logger.Info("Mail sent!");
+                    SmtpRoutinLogger.Info("Mail sent!");
                 }
 
                 MyToken token = (MyToken)e.UserState;
@@ -223,7 +224,7 @@ namespace hotel_mini_proxy.mail
                 }
                 catch (Exception ex)
                 {
-                    Program.Logger.Error("Error disposing mail: " + ex.ToString() + " err:" + e.Error.Message);
+                    SmtpRoutinLogger.Error("Error disposing mail: " + ex.ToString() + " err:" + e.Error.Message);
                 }
                 if (token.EAttachments.Count > 0)
                 {
@@ -237,7 +238,7 @@ namespace hotel_mini_proxy.mail
                             }
                             catch (Exception ex)
                             {
-                                Program.Logger.Error(ex.ToString() + " err:" + ((e.Error != null) ? e.Error.Message : ""));
+                                SmtpRoutinLogger.Error(ex.ToString() + " err:" + ((e.Error != null) ? e.Error.Message : ""));
                             }
                         }
                     }

@@ -27,8 +27,8 @@ namespace hotel_mini_proxy.pmsRoutine
         private readonly TcpClient _hotelPmsClient = new TcpClient();
         private readonly Config _config;
         private readonly Protocol _prot;
-
-        private static readonly Logger LoggerBilling = LogManager.GetLogger("Billing");
+        private static readonly Logger PmsLogger = LogManager.GetLogger("PMS Broker");
+        private static readonly Logger BillingLogger = LogManager.GetLogger("Billing PMS Broker");
 
         public PmsBroker(Config config, Logger logger, Protocol protocol)
         {
@@ -40,11 +40,11 @@ namespace hotel_mini_proxy.pmsRoutine
         private void TryConnect2Pms()
         {
 
-            _logger.Info($"Try connect to the PMS of the hotel: {_config.HotelHost}:{_config.HotelPort}");
+            PmsLogger.Info($"Try connect to the PMS of the hotel: {_config.HotelHost}:{_config.HotelPort}");
             int atempt = 0;
             while (!_hotelPmsClient.IsConnected)
             {
-                _logger.Trace($"TCP: pms client Try to connect ... {++atempt}");
+                PmsLogger.Trace($"TCP: pms client Try to connect ... {++atempt}");
                 _hotelPmsClient.Connect(_config.HotelHost, _config.HotelPort);
                 Thread.Sleep(10 * 1000);
             }
@@ -61,13 +61,14 @@ namespace hotel_mini_proxy.pmsRoutine
         }
 
         private bool _fiasConnectionEstablished;
+
         private void _hotelPmsClient_Connected()
         {
             Thread.Sleep(5100);
             _fiasConnectionEstablished = false;
             if (!_fiasConnectionEstablished)
             {
-                _logger.Trace($"Send to the PMS: {_prot.GetInitRequestString()}");
+                PmsLogger.Trace($"Send to the PMS: {_prot.GetInitRequestString()}");
                 _hotelPmsClient.SendData(_prot.GetInitRequestString());
             }
 
@@ -75,17 +76,31 @@ namespace hotel_mini_proxy.pmsRoutine
         private void _hotelPmsClient_DataArrival(long available)
         {
             string s = "";
-
-            for (long i = 1L; i < available; i++)
+            try
             {
-                var c = Convert.ToInt32(_hotelPmsClient.GetData(1).GetValue(0));
-                if (c != 0)
+                for (long i = 1L; i < available; i++)
                 {
-                    s += ChrOperation.Chr(c);
+                    var c = Convert.ToInt32(_hotelPmsClient.GetData(1).GetValue(0));
+                    if (c != 0)
+                    {
+                        s += ChrOperation.Chr(c);
+                    }
                 }
+                PmsLogger.Trace($"Received form the hotel's PMS: {s}");
+                ParsePmsAnswer(s);
             }
-            _logger.Trace($"Received form the hotel's PMS: {s}");
-            ParsePmsAnswer(s);
+            catch (Exception ex)
+            {
+
+                PmsLogger.Error(ex, "Error receive data from the hotel");
+                _hotelPmsClient.Connected -= _hotelPmsClient_Connected;
+                _hotelPmsClient.DataArrival -= _hotelPmsClient_DataArrival;
+                _hotelPmsClient.Disconnect -= _hotelPmsClient_Disconnect;
+                Connect2Pms();
+            }
+
+
+
         }
 
         private void ParsePmsAnswer(string answerMsg)
@@ -99,7 +114,7 @@ namespace hotel_mini_proxy.pmsRoutine
                     List<ParserResult> results = _prot.Parcer($"{answer}{ETX}");
                     foreach (var command in results)
                     {
-                        _logger.Trace($"Pms client received:{answer}: {command.Command}");
+                        PmsLogger.Trace($"result's parser: Pms's client received:{answer}: {command.Command}");
                         switch (command.Command)
                         {
                             case Command.Init:
@@ -108,7 +123,7 @@ namespace hotel_mini_proxy.pmsRoutine
                                     foreach (var currentInitStr in initStrings)
                                     {
                                         _hotelPmsClient.SendData(currentInitStr);
-                                        _logger.Trace($"Current init string: <STX>{currentInitStr.TrimStart(STX).TrimEnd(ETX)}<ETX>");
+                                        PmsLogger.Trace($"Current init string: <STX>{currentInitStr.TrimStart(STX).TrimEnd(ETX)}<ETX>");
                                     }
 
                                     break;
@@ -118,18 +133,19 @@ namespace hotel_mini_proxy.pmsRoutine
                                 {
                                     if (command.Ticket >= _config.MqttClientTicketStart)
                                     {
-                                        LoggerBilling.Info($"PE answer for the MQTT's broker: {answer}");
+
                                         var splited = answer.Trim(STX, ETX).Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
                                         //int ticket = command.Ticket - _config.MqttClientTicketStart ?? 0;
                                         string answ = answer.Trim(STX, ETX);
+                                        //LoggerBilling.Info($"PA's answer for the MQTT's broker: <STX>{answ}<ETX>");
                                         if (splited[0] == "PA" && _config.Interface == "BestBar")
                                         {
                                             answ = answer.Contains("AN") ? answ.Replace("|AN", "|AS") : answ;
                                         }
                                         if (MqttAnswer != null)
                                         {
-                                            LoggerBilling.Trace($"Fire {command.Command}'s answer: {$"{STX}|{answ}{ETX}"} to mqtt");
-                                            _logger.Trace($"Fire {command.Command}'s answer: {$"{STX}|{answ}{ETX}"} to mqtt");
+                                            BillingLogger.Info($"Fire {command.Command}'s answer: {$"{STX}|{answ}{ETX}"} to mqtt");
+                                            PmsLogger.Trace($"Fire {command.Command}'s answer: {$"{STX}|{answ}{ETX}"} to mqtt");
                                             AnswerEventArgs e = new AnswerEventArgs()
                                             {
                                                 Answer = $"{STX}|{answ}{ETX}",
@@ -145,8 +161,8 @@ namespace hotel_mini_proxy.pmsRoutine
                                     {
                                         if (HotelAnswer != null)
                                         {
-                                            LoggerBilling.Info($"Fire {command.Command}'s answer:{$"{answer}{ETX}"} to minibar client");
-                                            _logger.Trace($"Fire {command.Command}'s answer:{$"{answer}{ETX}"} to minibar client");
+                                            BillingLogger.Info($"Fire {command.Command}'s answer:{$"{answer}{ETX}"} to minibar client");
+                                            PmsLogger.Trace($"Fire {command.Command}'s answer:{$"{answer}{ETX}"} to minibar client");
                                             AnswerEventArgs e = new AnswerEventArgs()
                                             {
                                                 Answer = $"{answer}{ETX}",
@@ -162,7 +178,7 @@ namespace hotel_mini_proxy.pmsRoutine
                                 {//return answer to TCP and Mqtt
                                     if (HotelAnswer != null)
                                     {
-                                        _logger.Trace($"Fire {command.Command}'s answer:{$"{answer}{ETX}"} to minibar client");
+                                        PmsLogger.Trace($"Fire {command.Command}'s answer:{$"{answer}{ETX}"} to minibar client");
                                         AnswerEventArgs e = new AnswerEventArgs()
                                         {
                                             Answer = $"{answer}{ETX}",
@@ -172,7 +188,7 @@ namespace hotel_mini_proxy.pmsRoutine
                                     }
                                     if (MqttAnswer != null)
                                     {
-                                        _logger.Trace($"Fire {command.Command}'s answer: {$"{answer}{ETX}"} to mqtt");
+                                        PmsLogger.Trace($"Fire {command.Command}'s answer: {$"{answer}{ETX}"} to mqtt");
                                         AnswerEventArgs e = new AnswerEventArgs()
                                         {
                                             Answer = $"{answer}{ETX}",
@@ -191,20 +207,25 @@ namespace hotel_mini_proxy.pmsRoutine
             catch (Exception ex)
             {
 
-                _logger.Error($"Error resolve PMS's answer: {ex}");
+                PmsLogger.Error($"Error resolve PMS's answer: {ex}");
             }
 
 
         }
 
-        public void SendToPms(string message)
+        public void SendToPms(string message, string typeOfMessage, string from = "")
         {
+            if (typeOfMessage.Contains("PS"))
+            {
+                BillingLogger.Info($"send PS's request: {message} from {from} to the PMS");
+            }
+            PmsLogger.Trace($"Send request: {message} from {from} to the PMS");
             _hotelPmsClient.SendData(message);
         }
 
         private void _hotelPmsClient_Disconnect()
         {
-            _logger.Warn("A connect with the hotel's PMS had lost. Try to reconnect");
+            PmsLogger.Warn("A connect with the hotel's PMS had lost. Try to reconnect");
             var mail = new Smtpmail.SendingMail(Program.Config.SendTo, "A connect with the hotel's PMS had lost.")
             {
                 Subj = "Connectin with PMS was dropped"
