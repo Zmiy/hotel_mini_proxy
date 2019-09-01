@@ -96,7 +96,7 @@ namespace hotel_mini_proxy.pmsRoutine
                 _hotelPmsClient.Connected -= _hotelPmsClient_Connected;
                 _hotelPmsClient.DataArrival -= _hotelPmsClient_DataArrival;
                 _hotelPmsClient.Disconnect -= _hotelPmsClient_Disconnect;
-                Connect2Pms();
+                TryConnect2Pms();
             }
 
 
