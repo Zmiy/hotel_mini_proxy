@@ -5,23 +5,25 @@ using System.Threading;
 using System.Threading.Tasks;
 using hotel_mini_proxy.mail;
 using hotel_mini_proxy.PmsInterface;
+using hotel_mini_proxy.Tools;
 using NLog;
 using uPLibrary.Networking.M2Mqtt;
 using uPLibrary.Networking.M2Mqtt.Messages;
-using static hotel_mini_proxy.Tools.ChrOperation;
 
-namespace hotel_mini_proxy.mqttRoutine
+namespace hotel_mini_proxy.SmartThingsProtocol.mqttRoutine
 {
-    public class MessageToPmsEventArgs : EventArgs
-    {
-        public string Message { get; set; }
-    }
+    //public class MessageToPmsEventArgs : EventArgs
+    //{
+    //    public string Message { get; set; }
+    //}
 
-    internal class MqttBroker
+    internal class MqttBroker : SmartThing
     {
-        public delegate void MessageToPmsHandler(object sender, MessageToPmsEventArgs e);
+        // public delegate void MessageToPmsHandler(object sender, MessageToPmsEventArgs e);
 
-        public event MessageToPmsHandler MqttToPms;
+        // public event SmartThing.MessageToPmsHandler SmartThingToPms;
+        public override event MessageToPmsHandler SmartThingToPms;
+        // public event MessageToPmsHandler MqttToPms;
 
         // private readonly Logger _logger;
         private MqttClient _clientMqtt;
@@ -38,7 +40,7 @@ namespace hotel_mini_proxy.mqttRoutine
             _prot = protocol;
         }
 
-        public void Connect2Mqtt()
+        public override void Connect2SmartProtocol()
         {
             //Task tsk = new Task(TryConnect2Mqtt);
             Task tsk = new Task(CreateMqttClient);
@@ -124,15 +126,15 @@ namespace hotel_mini_proxy.mqttRoutine
             MqttLogger.Warn("--------MQTT Connection closed-----------");
             _clientMqtt.Unsubscribe(new string[] { _config.SubscribeTopic });
             _clientMqtt = null;
-            Connect2Mqtt();
+            Connect2SmartProtocol();
         }
 
         private void _clientMqtt_MqttMsgPublishReceived(object sender, MqttMsgPublishEventArgs e)
         {
             try
             {
-                var msg = Encoding.UTF8.GetString(e.Message).Trim(STX, ETX);
-                var s = msg.Trim(STX, ETX).Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
+                var msg = Encoding.UTF8.GetString(e.Message).Trim(ChrOperation.STX, ChrOperation.ETX);
+                var s = msg.Trim(ChrOperation.STX, ChrOperation.ETX).Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
                 MqttLogger.Trace($"Received From MQTT (topic:{e.Topic}): <STX>{msg}<ETX>, clientId={_clientMqtt.ClientId}");
                 switch (s[0])
                 {
@@ -143,24 +145,26 @@ namespace hotel_mini_proxy.mqttRoutine
                         {
                             var fias = new FiasTcp();
                             var obj = fias.ParceBilingString(msg);
-                            msg = _prot.MakeBillingString(obj).Trim(STX, ETX);
+                            msg = _prot.MakeBillingString(obj).Trim(ChrOperation.STX, ChrOperation.ETX);
                         }
-                        BillingLogger.Info($"Fire PS's message: {$"{STX}{msg}{ETX}"} to the PMS");
+                        BillingLogger.Info($"Fire PS's message: {$"{ChrOperation.STX}{msg}{ChrOperation.ETX}"} to the PMS");
                         break;
                     case "LA":
-                        _clientMqtt.Publish(_config.PublicTopic, Encoding.UTF8.GetBytes($"{STX}{msg}{ETX}"), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, true);
+                        _clientMqtt.Publish(_config.PublicTopic, Encoding.UTF8.GetBytes($"{ChrOperation.STX}{msg}{ChrOperation.ETX}"), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, false);
                         MqttLogger.Trace($"Sent LA's answer to Mqtt: <STX>{msg}<ETX>");
                         break;
                 }
-                if (MqttToPms != null)
-                {
-                    MqttLogger.Info($"Fire message: <STX>{msg}<ETX> to the PMS");
-                    MessageToPmsEventArgs ev = new MessageToPmsEventArgs()
-                    {
-                        Message = $"{STX}{msg}{ETX}"
-                    };
-                    MqttToPms(this, ev);
-                }
+                SmartThingToPms?.Invoke(this, new SmartThingsProtocol.MessageToPmsEventArgs() { Message = $"{ChrOperation.STX}{msg}{ChrOperation.ETX}" });
+                MqttLogger.Info($"Fire message: <STX>{msg}<ETX> to the PMS");
+                //if (MqttToPms != null)
+                //{
+                //    MqttLogger.Info($"Fire message: <STX>{msg}<ETX> to the PMS");
+                //    MessageToPmsEventArgs ev = new MessageToPmsEventArgs()
+                //    {
+                //        Message = $"{STX}{msg}{ETX}"
+                //    };
+                //    MqttToPms(this, ev);
+                //}
 
             }
             catch (Exception ex)
@@ -171,14 +175,14 @@ namespace hotel_mini_proxy.mqttRoutine
 
         }
 
-        public void SendToMqtt(string message)
+        public override void SendToMqtt(string message)
         {
             if (message.Contains("|PA|"))
             {
-                BillingLogger.Info($"Send PA's answer: <STX>{message.Trim(STX, ETX)}<ETX> to the MQTT brocker");
+                BillingLogger.Info($"Send PA's answer: <STX>{message.Trim(ChrOperation.STX, ChrOperation.ETX)}<ETX> to the MQTT brocker");
             }
             _clientMqtt.Publish(_config.PublicTopic, Encoding.UTF8.GetBytes($"{message}"), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, false);
-            MqttLogger.Trace($"Sent message from PMS to Mqtt: <STX>{message.Trim(STX, ETX)}<ETX>");
+            MqttLogger.Trace($"Sent message from PMS to Mqtt: <STX>{message.Trim(ChrOperation.STX, ChrOperation.ETX)}<ETX>");
         }
 
         //subscribed to MQTT
@@ -188,7 +192,7 @@ namespace hotel_mini_proxy.mqttRoutine
             _clientMqtt.MqttMsgPublishReceived += _clientMqtt_MqttMsgPublishReceived;
             _clientMqtt.MqttMsgPublished += _clientMqtt_MqttMsgPublished;
             _clientMqtt.MqttMsgUnsubscribed += _clientMqtt_MqttMsgUnsubscribed;
-            _clientMqtt.Publish(_config.NewBornTopic, Encoding.UTF8.GetBytes($"{_config.HotelName}: proxy online"), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, true);
+            _clientMqtt.Publish(_config.NewBornTopic, Encoding.UTF8.GetBytes($"{_config.HotelName}: proxy online"), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, false);
 
         }
 

@@ -160,7 +160,8 @@ namespace hotel_mini_proxy.PmsInterface
         private static string RoomNumberParser(string rnro, IEnumerable<string> parcer)
         {
             var result = "NOTHING";
-            var resultOfParce = parcer.Where(str => str.ToUpper().Contains(rnro)).DefaultIfEmpty().ToDictionary(str => str.Substring(0, 2).ToUpper(), str => str.Substring(2).ToUpper());
+            if (rnro == null) return result;
+            var resultOfParce = parcer.Where(str => str.ToUpper().Contains(rnro)).DefaultIfEmpty(defaultValue: $"{rnro}NOTHING").ToDictionary(str => str.Length > 0 ? str.Substring(0, 2).ToUpper() : rnro, str => str.Length > 0 ? str.Substring(2).ToUpper() : "NOTHING");
             if (resultOfParce.Count > 0)
             {
                 result = resultOfParce[rnro].TrimStart('0');

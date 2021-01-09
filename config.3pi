@@ -1,18 +1,16 @@
 {
   "mqttClientOptions": {
     "port": 39001,
-    "host": "mqtt.wigidex.com",
+    "host": "mqtts.3pi-solutions.com",
     "useSsl": true,
-    "useAutorization": true,
+    "useAutorization": false,
     "userName": "rothschild22",
     "password": "rothschild22!pass"
   },
   "mqttTopicIn": "receiver",
   "mqttTopicOut": "transponder",
   "mqttGroupId": "gate",
-  "mqttPlaceId": "rothschild22",
-  "mqttTopicLastWill": "lwt",
-  "mqttTopicNewBorn": "nbrn",
+  "mqttPlaceId": "hotel_n",
   "hotelClientOptions": {
     "hotelHost": "evgeny-dell-pc",
     "hotelPort": 1011,
@@ -31,9 +29,5 @@
     "SMTPPort": 587,
     "SMTPPassword": "1homimntc9",
     "SendTo": "evgeny@3pi-solutions.com"
-  },
-  "smartThingInterface": "mqtt",
-  "queue": {
-    "topic": "save"
   }
 }

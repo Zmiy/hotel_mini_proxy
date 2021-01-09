@@ -1,34 +1,34 @@
 ﻿using System;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using hotel_mini_proxy.PmsInterface;
-using hotel_mini_proxy.mail;
-using hotel_mini_proxy.mqttRoutine;
 using hotel_mini_proxy.pmsRoutine;
+using hotel_mini_proxy.Rabbit;
+using hotel_mini_proxy.SmartThingsProtocol;
+using hotel_mini_proxy.SmartThingsProtocol.mqttRoutine;
+using hotel_mini_proxy.SmartThingsProtocol.Rabbit;
 using NLog;
 using uPLibrary.Networking.M2Mqtt;
-using uPLibrary.Networking.M2Mqtt.Messages;
 using TcpLibrary;
 using TcpClient = TcpLibrary.TcpClient;
-using static hotel_mini_proxy.Tools.ChrOperation;
 
 namespace hotel_mini_proxy
 {
     internal static class Program
     {
-        private static MqttClient _clientMqtt;
+        // private static MqttClient _clientMqtt;
         private static readonly TcpClient HotelPmsClient = new TcpClient();
         private static readonly TcpServer HotelListener = new TcpServer();
         public static Config Config;
         private static Protocol _prot;
-        private static X509Certificate2 _clientCert;
-        private static X509Certificate _caCert;
+        // private static X509Certificate2 _clientCert;
+        // private static X509Certificate _caCert;
         private static readonly Logger MainLogger = LogManager.GetLogger("Main Broker");
         private static PmsBroker _pmsBroker;
         private static HotelBroker _hotelBroker;
         private static MqttBroker _mqttBroker;
+        private static RabbitMqBroker _rabbitMqBroker;
+        private static SmartThing _smartThingBroker;
+
         private static void InitPmsProtocol()
         {
             switch (Config.Interface)
@@ -51,77 +51,23 @@ namespace hotel_mini_proxy
             }
         }
 
-        //private static void Connect2Mqtt()
-        //{
-        //    //Task tsk = new Task(TryConnect2Mqtt);
-        //    Task tsk = new Task(CreateMqttClient);
-        //    tsk.Start();
-
-        //    Task.WaitAll(tsk);
-        //}
-
-        //create new MQTTC client
-        //private static void CreateMqttClient()
-        //{
-        //    while (_clientMqtt == null)
-        //    {
-        //        try
-        //        {
-        //            //_clientCert = new X509Certificate2("cert/client.pfx", "tkphbv#1");
-        //            _caCert = null;//X509Certificate.CreateFromCertFile("cert/server.crt");
-        //            _clientCert = null;//new X509Certificate2("cert/client.key");
-
-        //            _clientMqtt = new MqttClient(Config.MqttHost, Config.MqttPort, Config.UseSsl, _caCert, _clientCert, MqttSslProtocols.TLSv1_2);
-
-        //            _clientMqtt.MqttMsgSubscribed += _clientMqtt_MqttMsgSubscribed;
-        //            _clientMqtt.ConnectionClosed += _clientMqtt_ConnectionClosed;
-        //            _clientMqtt.ProtocolVersion = MqttProtocolVersion.Version_3_1_1;
-
-        //        }
-
-        //        catch (Exception ex)
-        //        {
-        //            //Console.WriteLine($"Issues creating MQTT Client{ex.Message}\n{ex.InnerException}");
-        //            Logger.Error($"Issues creating MQTT Client{ex.Message}\n{ex.InnerException}");
-        //            Thread.Sleep(30 * 1000);
-        //        }
-        //    }
-        //    TryConnect2Mqtt();
-
-        //}
-
-        private static void TryConnect2Mqtt()
+        private static void InitSmartThingProtocol()
         {
-            var atempt = 0;
-            MainLogger.Info("Try connect to MQTT");
-            const string clientId = "hotel_mini_proxy"; //Guid.NewGuid().ToString();
-            _clientMqtt.Unsubscribe(new[] { Config.SubscribeTopic });
-            while (!_clientMqtt.IsConnected)
+            switch (Config.SmartThingInterface)
             {
-                try
-                {
-                    MainLogger.Trace($"MQTT Try to connect... {++atempt}, { Config.UserName},{Config.Password}");
-                    Thread.Sleep(15 * 1000);
-                    //connect to MQTT by SSL or not by Config
-                    var code = Config.UseAutorization ? _clientMqtt.Connect(clientId + atempt, Config.UserName, Config.Password, true, 60) : _clientMqtt.Connect(clientId + atempt, null, null, true, 60);
-
-                    //139.162.222.115, MATZI
-                    //matzi /
-                    MainLogger.Info($"connection code: {code}");
-                }
-
-                catch (Exception ex)
-                {
-                    //Console.WriteLine($"{ex.Message}\n {ex.InnerException}\nSleep 30sec");
-                    MainLogger.Error($"{ex}", "Failed connect to MQTT");
-                    Thread.Sleep(15 * 1000);
-                }
-
+                case "mqtt":
+                    {
+                        _smartThingBroker = new MqttBroker(Config, MainLogger, _prot);
+                        break;
+                    }
+                case "rabbit":
+                    {
+                        _smartThingBroker = new RabbitMqBroker(Config, _prot);
+                        break;
+                    }
             }
-            MainLogger.Trace("Subscribing to the topic: {0} ", Config.SubscribeTopic);
-            var msgId = _clientMqtt.Subscribe(new[] { Config.SubscribeTopic }, new[] { MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE });
-            MainLogger.Trace($"Client mqtt subscribed with id {msgId}");
         }
+
 
         static void Main(string[] args)
         {
@@ -130,51 +76,36 @@ namespace hotel_mini_proxy
             Config = new Config(); //read a configuration info
             InitPmsProtocol();
             //Client to PMS
-            //HotelPmsClient.Connected += pmsRoutine.PmsRoutine.HotelPmsClient_Connected;
-            //HotelPmsClient.DataArrival += pmsRoutine.PmsRoutine.HotelPmsClient_DataArrival;
-            //HotelPmsClient.Disconnect += pmsRoutine.PmsRoutine.HotelPmsClient_Disconnect;
-            ////HotelPmsClient.Connect(_config.HotelHost, _config.HotelPort);
-            //pmsRoutine.PmsRoutine.Connect2Pms();
             _pmsBroker = new PmsBroker(Config, MainLogger, _prot);
             _pmsBroker.Connect2Pms();
+            // _pmsBroker.pmsConnected += _pmsBroker_pmsConnected;
+            // _pmsBroker.pmsDisconnected += _pmsBroker_pmsDisconnected;
             _pmsBroker.MqttAnswer += PmsBroker_MqttAnswer;
             _pmsBroker.HotelAnswer += PmsBroker_HotelAnswer;
             // Listener for hotel 
             _hotelBroker = new HotelBroker(Config, MainLogger, _prot);
             _hotelBroker.ListenHotelRequests();
             _hotelBroker.MessageForPms += _hotelBroker_messageForPms;
-            //HotelListener.DataArrival += pmsRoutine.PmsRoutine._hotelListener_DataArrival;
-            //HotelListener.Connected += pmsRoutine.PmsRoutine._hotelListener_Connected;
-            //IPAddress ipListener = IPAddress.Any;//LocalIpAddress();
-
-            //HotelListener.Port(ipListener, Config.ListenerPort);
-            //HotelListener.StartListen();
-            //Console.WriteLine("Start listening on {0}:{1}", ipListener, _config.ListenerPort);
-
 
             //MQTT connect
             //_clientCert = new X509Certificate2("cert/client2048.pfx", "tkphbv#1");
 
-            _mqttBroker = new MqttBroker(Config, MainLogger, _prot);
-            _mqttBroker.Connect2Mqtt();
-            _mqttBroker.MqttToPms += _mqttBroker_MqttToPms;
+            // _mqttBroker = new MqttBroker(Config, MainLogger, _prot);
+            // _mqttBroker.Connect2SmartProtocol();
+            // _mqttBroker.MqttToPms += _mqttBroker_MqttToPms;
+            // _mqttBroker.SmartThingToPms += _mqttBroker_MqttToPms;
+            InitSmartThingProtocol();
+            _smartThingBroker.Connect2SmartProtocol();
+            _smartThingBroker.SmartThingToPms += _mqttBroker_MqttToPms;
 
-            //_clientCert = null;//new X509Certificate2("cert/client.crt");
-            //_caCert = null;// X509Certificate.CreateFromCertFile("cert/server.crt");
-            //_clientMqtt = new MqttClient(Config.MqttHost, Config.MqttPort, Config.UseSsl, _caCert, _clientCert, MqttSslProtocols.TLSv1_2);
-
-            //_clientMqtt.MqttMsgSubscribed += _clientMqtt_MqttMsgSubscribed;
-            //_clientMqtt.ConnectionClosed += _clientMqtt_ConnectionClosed;
-            //_clientMqtt.ProtocolVersion = MqttProtocolVersion.Version_3_1_1;
-            //Connect2Mqtt();
-
-            //Console.WriteLine("End Of main");
         }
+
+
 
         private static void _mqttBroker_MqttToPms(object sender, MessageToPmsEventArgs e)
         {
             MainLogger.Info($"Sending a MQTT's message: {e.Message} to the PMS's broker");
-            _pmsBroker.SendToPms(e.Message, "PS", "MQTT Broker");
+            _pmsBroker.SendToPms(e.Message, e.Message.Contains("PS") ? "PS" : "NO", "MQTT Broker");
 
         }
 
@@ -193,13 +124,8 @@ namespace hotel_mini_proxy
         private static void PmsBroker_MqttAnswer(object sender, AnswerEventArgs e)
         {
             MainLogger.Info($"Sending a {e.TypeOfAnswer}'s PMS's answer to MQTT broker");
-            _mqttBroker.SendToMqtt(e.Answer);
-            //if (_clientMqtt.IsConnected)
-            //{
-            //    Logger.Info($"Sending a {e.TypeOfAnswer}'s answer to MQTT broker");
-            //    _clientMqtt.Publish(Config.PublicTopic, Encoding.UTF8.GetBytes($"{ETX}{e.Answer}{STX}"),
-            //        MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, true);
-            //}
+            // _mqttBroker.SendToMqtt(e.Answer);
+            _smartThingBroker.SendToMqtt(e.Answer);
 
         }
 
@@ -253,7 +179,7 @@ namespace hotel_mini_proxy
         //    Logger.Warn("--------MQTT Connection closed-----------");
         //    _clientMqtt.Unsubscribe(new string[] { Config.SubscribeTopic });
         //    _clientMqtt = null;
-        //    Connect2Mqtt();
+        //    Connect2SmartProtocol();
         //}
 
         //private static void _clientMqtt_MqttMsgPublishReceived(object sender, MqttMsgPublishEventArgs e)

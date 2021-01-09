@@ -12,7 +12,7 @@ namespace hotel_mini_proxy
         internal int ListenerPort { get; private set; }
         internal int MqttClientTicketStart { get; private set; }
         internal string Interface { get; private set; }
-
+        internal string SmartThingInterface { get; private set; }
         internal string HotelName { get; private set; }
         internal string SenderEmail { get; private set; }
         internal bool EnableSsl { get; private set; }
@@ -22,6 +22,8 @@ namespace hotel_mini_proxy
         internal string SmtpPassword { get; private set; }
         internal string SendTo { get; private set; }
 
+        internal string QueueTopic { get; private set; }
+
         private readonly bool? _useSsl;
         private readonly bool? _useAutorization;
         private readonly string _userName;
@@ -30,7 +32,8 @@ namespace hotel_mini_proxy
         private readonly string _mqttPlaceId;
         private readonly string _mqttTopicIn;
         private readonly string _mqttTopicOut;
-
+        private readonly string _mqttTopicLastWill;
+        private readonly string _mqttTopicNewBorn;
 
         public Config()
         {
@@ -47,11 +50,14 @@ namespace hotel_mini_proxy
                 this._mqttTopicOut = config["mqttTopicOut"]; //Outcomming topic name
                 this._mqttGroupId = config["mqttGroupId"]; //Group ID
                 this._mqttPlaceId = config["mqttPlaceId"]; // PlaceID for Chanel
+                this._mqttTopicLastWill = config["mqttTopicLastWill"];
+                this._mqttTopicNewBorn = config["mqttTopicNewBorn"];
                 this.HotelHost = config["hotelClientOptions"]["hotelHost"]; //PMS's host
                 this.HotelPort = config["hotelClientOptions"]["hotelPort"]; //PMS's host
                 this.ListenerPort = config["tcpListener"]["listenerPort"];
                 this.MqttClientTicketStart = config["MqttClientTicketStart"]; //Min ticket number of MQTT client
                 this.Interface = config["hotelClientOptions"]["interface"];
+                this.SmartThingInterface = config["smartThingInterface"];
 
                 this.HotelName = config["smtpMailOptions"]["HotelName"];
                 this.SenderEmail = config["smtpMailOptions"]["SenderEmail"];
@@ -61,14 +67,19 @@ namespace hotel_mini_proxy
                 this.SmtpUser = config["smtpMailOptions"]["SMTPUser"];
                 this.SmtpPassword = config["smtpMailOptions"]["SMTPPassword"];
                 this.SendTo = config["smtpMailOptions"]["SendTo"];
+
+                this.QueueTopic = config["queue"]["topic"];
             }
         }
 
         public string SubscribeTopic => $"{_mqttPlaceId}/{_mqttGroupId}/{_mqttTopicIn}";
         public string PublicTopic => $"{_mqttPlaceId}/{_mqttGroupId}/{_mqttTopicOut}";
+        public string LastWillTopic => $"{_mqttPlaceId}/{_mqttGroupId}/{_mqttTopicLastWill}";
+        public string NewBornTopic => $"{_mqttPlaceId}/{_mqttGroupId}/{_mqttTopicNewBorn}";
         public bool UseSsl => this._useSsl ?? true;
         public bool UseAutorization => this._useAutorization ?? false;
         public string UserName => this._userName ?? "";
         public string Password => this._password ?? "";
+
     }
 }

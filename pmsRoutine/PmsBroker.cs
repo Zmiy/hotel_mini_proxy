@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using hotel_mini_proxy.mail;
 using hotel_mini_proxy.PmsInterface;
+using hotel_mini_proxy.Rabbit;
 using hotel_mini_proxy.Tools;
 using NLog;
 using TcpLibrary;
@@ -20,9 +21,12 @@ namespace hotel_mini_proxy.pmsRoutine
     class PmsBroker
     {
         public delegate void AnswerForBrockerHandler(object sender, AnswerEventArgs e);
+        public delegate void ConnectionActions(object sender);
 
         public event AnswerForBrockerHandler HotelAnswer;
         public event AnswerForBrockerHandler MqttAnswer;
+        public event ConnectionActions pmsConnected;
+        public event ConnectionActions pmsDisconnected;
         private readonly Logger _logger;
         private readonly TcpClient _hotelPmsClient = new TcpClient();
         private readonly Config _config;
@@ -71,8 +75,12 @@ namespace hotel_mini_proxy.pmsRoutine
                 PmsLogger.Trace($"Send to the PMS: {_prot.GetInitRequestString()}");
                 _hotelPmsClient.SendData(_prot.GetInitRequestString());
             }
-
+            pmsConnected?.Invoke(this);
+            //Program._queueBroker = new RabbitMqBroker(_config);
+            //Program._queueBroker.Connect();
+            //Program._queueBroker.GetMessage();
         }
+
         private void _hotelPmsClient_DataArrival(long available)
         {
             string s = "";
@@ -233,6 +241,8 @@ namespace hotel_mini_proxy.pmsRoutine
 
             mail.SendMail();
             Connect2Pms();
+            pmsDisconnected?.Invoke(this);
+            // Program._queueBroker.Close();
         }
     }
 }
