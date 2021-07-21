@@ -3,7 +3,7 @@
     "port": 39001,
     "host": "mqtt.wigidex.com",
     "useSsl": true,
-    "useAutorization": true,
+    "useAuthorization": true,
     "userName": "rothschild22",
     "password": "rothschild22!pass"
   },
@@ -12,7 +12,9 @@
   "mqttGroupId": "gate",
   "mqttPlaceId": "rothschild22",
   "mqttTopicLastWill": "lwt",
-  "mqttTopicNewBorn": "nbrn",
+  "mqttTopicNewBorn": "alive",
+  "mqttTopicPing": "CFG",
+   "mqttTopicAlert": "alert",
   "hotelClientOptions": {
     "hotelHost": "evgeny-dell-pc",
     "hotelPort": 1011,
@@ -33,6 +35,15 @@
     "SendTo": "evgeny@3pi-solutions.com"
   },
   "smartThingInterface": "mqtt",
+  "rabbitClientOptions": {
+    "host": "https://orangutan.rmq.cloudamqp.com/",
+    "useAuthorization": true,
+    "userName": "dbjjvevp",
+    "password": "ofxiLfaLkwgC4DgLOufq-oQyY9boyrKE",
+    "exchange": ""
+  },
+  "rabbitTopicIn": "rothschild22.gate.receiver",
+  "rabbitTopicOut": "rothschild22.gate.transponder",
   "queue": {
     "topic": "save"
   }

@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Configuration;
+using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
@@ -7,6 +10,7 @@ using hotel_mini_proxy.mail;
 using hotel_mini_proxy.PmsInterface;
 using hotel_mini_proxy.Tools;
 using NLog;
+using NLog.LayoutRenderers;
 using uPLibrary.Networking.M2Mqtt;
 using uPLibrary.Networking.M2Mqtt.Messages;
 
@@ -57,8 +61,8 @@ namespace hotel_mini_proxy.SmartThingsProtocol.mqttRoutine
                 try
                 {
 
-                    _caCert = null;//X509Certificate.CreateFromCertFile("cert/server.crt");
-                    _clientCert = null;//new X509Certificate2("cert/client.key");
+                    _caCert = X509Certificate.CreateFromCertFile("cert/server.crt");
+                    _clientCert = new X509Certificate2("cert/client.crt");
 
                     _clientMqtt = new MqttClient(_config.MqttHost, _config.MqttPort, _config.UseSsl, _caCert, _clientCert, MqttSslProtocols.TLSv1_2);
 
@@ -80,7 +84,7 @@ namespace hotel_mini_proxy.SmartThingsProtocol.mqttRoutine
 
         private void TryConnect2Mqtt()
         {
-            var atempt = 0;
+            var attempt = 0;
             MqttLogger.Info("Try connect to MQTT");
             string clientId = $"hotel_proxy_{Guid.NewGuid()}"; //Guid.NewGuid().ToString();
             _clientMqtt.Unsubscribe(new[] { _config.SubscribeTopic });
@@ -88,14 +92,14 @@ namespace hotel_mini_proxy.SmartThingsProtocol.mqttRoutine
             {
                 try
                 {
-                    MqttLogger.Trace($"MQTT Try to connect... {++atempt}, { _config.UserName},{_config.Password}");
+                    MqttLogger.Trace($"MQTT Try to connect... {++attempt}, { _config.UserName},{_config.Password}");
                     Thread.Sleep(15 * 1000);
                     //connect to MQTT by SSL or not by Config
                     var lastWillMessage = $"{_config.HotelName}: proxy offline";
                     var lastWillTopic = _config.LastWillTopic;
-                    var userName = _config.UseAutorization ? _config.UserName : null;
-                    var password = _config.UseAutorization ? _config.Password : null;
-                    var code = _clientMqtt.Connect(clientId + atempt, userName, password, false,
+                    var userName = _config.UseAuthorization ? _config.UserName : null;
+                    var password = _config.UseAuthorization ? _config.Password : null;
+                    var code = _clientMqtt.Connect(clientId + attempt, userName, password, false,
                             MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true, lastWillTopic, lastWillMessage, true,
                             60);
                     //var code = _config.UseAutorization ? _clientMqtt.Connect(clientId + atempt, _config.UserName, _config.Password, false, MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true, "rothschild22/proxy/lwt", "proxy offline", true, 60) : _clientMqtt.Connect(clientId + atempt, null, null, false, MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true, "lwt", "proxy offline", true, 60);
@@ -110,8 +114,11 @@ namespace hotel_mini_proxy.SmartThingsProtocol.mqttRoutine
                 }
 
             }
-            MqttLogger.Trace("Subscribing to the topic: {0} ", _config.SubscribeTopic);
-            var msgId = _clientMqtt.Subscribe(new[] { _config.SubscribeTopic }, new[] { MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE });
+            MqttLogger.Trace($"Sent proxy\'s starting\'s message to {_config.AlertTopic}");
+            SendToMqtt("proxy started/re-started and ready", _config.AlertTopic);
+            MqttLogger.Trace("Subscribing to the topics: {0}, {1} ", _config.SubscribeTopic, _config.PingTopic);
+            var msgId = _clientMqtt.Subscribe(new[] { _config.SubscribeTopic, _config.PingTopic }, new[] { MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE });
+            
             MqttLogger.Trace($"Client mqtt subscribed with id {msgId}");
         }
 
@@ -119,7 +126,7 @@ namespace hotel_mini_proxy.SmartThingsProtocol.mqttRoutine
         {
             var mail = new Smtpmail.SendingMail(_config.SendTo, "A connect with the MQTT's broker has lost.")
             {
-                Subj = "Connectin with MQTT was dropped"
+                Subj = "Connecting with a MQTT was dropped"
             };
 
             mail.SendMail();
@@ -133,6 +140,21 @@ namespace hotel_mini_proxy.SmartThingsProtocol.mqttRoutine
         {
             try
             {
+                var topic = e.Topic;
+                if (topic.Contains(_config.PingTopic)) 
+                {
+                    DateTime  currentDateTime = DateTime.Now;
+                    var version = Assembly.GetExecutingAssembly().GetName().Version;
+                    var buildDate = new DateTime(2000, 1, 1)
+                        .AddDays(version.Build).AddSeconds(version.Revision * 2);
+
+                    var displayableVersion = $"{version} ({buildDate})";
+                    TimeSpan diff = currentDateTime.Subtract(Program.StartDateTime);
+                    var message = $"version: {version}, build date: {buildDate}, alive: {diff.TotalSeconds}, last communicated with PMS at {Program.LastPmsCommunicationTime}";
+                    SendToMqtt(message, _config.InfTopic);
+                    MqttLogger.Trace($"Received PING. Sent answer: {message} to {_config.InfTopic}");
+                    return;
+                }
                 var msg = Encoding.UTF8.GetString(e.Message).Trim(ChrOperation.STX, ChrOperation.ETX);
                 var s = msg.Trim(ChrOperation.STX, ChrOperation.ETX).Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
                 MqttLogger.Trace($"Received From MQTT (topic:{e.Topic}): <STX>{msg}<ETX>, clientId={_clientMqtt.ClientId}");
@@ -144,10 +166,10 @@ namespace hotel_mini_proxy.SmartThingsProtocol.mqttRoutine
                         if (_config.Interface == "BestBar")
                         {
                             var fias = new FiasTcp();
-                            var obj = fias.ParceBilingString(msg);
+                            var obj = fias.ParseBillingString(msg);
                             msg = _prot.MakeBillingString(obj).Trim(ChrOperation.STX, ChrOperation.ETX);
                         }
-                        BillingLogger.Info($"Fire PS's message: {$"{ChrOperation.STX}{msg}{ChrOperation.ETX}"} to the PMS");
+                        BillingLogger.Info($"Fire PS's message: {ChrOperation.STX}{msg}{ChrOperation.ETX} to the PMS");
                         break;
                     case "LA":
                         _clientMqtt.Publish(_config.PublicTopic, Encoding.UTF8.GetBytes($"{ChrOperation.STX}{msg}{ChrOperation.ETX}"), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, false);
@@ -174,7 +196,11 @@ namespace hotel_mini_proxy.SmartThingsProtocol.mqttRoutine
 
 
         }
-
+        public void SendToMqtt(string message, string topic)
+        {
+            _clientMqtt.Publish(topic, Encoding.UTF8.GetBytes($"{message}"), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, false);
+            MqttLogger.Trace($"Sent message from PMS to Mqtt: <STX>{message.Trim(ChrOperation.STX, ChrOperation.ETX)}<ETX>");
+        }
         public override void SendToMqtt(string message)
         {
             if (message.Contains("|PA|"))

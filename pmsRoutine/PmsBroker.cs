@@ -33,6 +33,7 @@ namespace hotel_mini_proxy.pmsRoutine
         private readonly Protocol _prot;
         private static readonly Logger PmsLogger = LogManager.GetLogger("PMS Broker");
         private static readonly Logger BillingLogger = LogManager.GetLogger("Billing PMS Broker");
+        private static Queue<string> buffer = new Queue<string>();
 
         public PmsBroker(Config config, Logger logger, Protocol protocol)
         {
@@ -86,7 +87,7 @@ namespace hotel_mini_proxy.pmsRoutine
             string s = "";
             try
             {
-                for (long i = 1L; i < available; i++)
+                for (var i = 1L; i < available; i++)
                 {
                     var c = Convert.ToInt32(_hotelPmsClient.GetData(1).GetValue(0));
                     if (c != 0)
@@ -119,7 +120,7 @@ namespace hotel_mini_proxy.pmsRoutine
             {
                 foreach (var answer in answers)
                 {
-                    List<ParserResult> results = _prot.Parcer($"{answer}{ETX}");
+                    List<ParserResult> results = _prot.Parser($"{answer}{ETX}");
                     foreach (var command in results)
                     {
                         PmsLogger.Trace($"result's parser: Pms's client received:{answer}: {command.Command}");
@@ -182,6 +183,11 @@ namespace hotel_mini_proxy.pmsRoutine
                                     }
                                     break;
                                 }
+                            case Command.Asc:
+                                {
+
+                                    break;
+                                }
                             default:
                                 {//return answer to TCP and Mqtt
                                     if (HotelAnswer != null)
@@ -223,9 +229,10 @@ namespace hotel_mini_proxy.pmsRoutine
 
         public void SendToPms(string message, string typeOfMessage, string from = "")
         {
-            if (typeOfMessage.Contains("PS"))
+            if (typeOfMessage.Contains("PS") || typeOfMessage.Contains("00"))
             {
                 BillingLogger.Info($"send PS's request: {message} from {from} to the PMS");
+                buffer.Enqueue(message);
             }
             PmsLogger.Trace($"Send request: {message} from {from} to the PMS");
             _hotelPmsClient.SendData(message);
@@ -233,10 +240,10 @@ namespace hotel_mini_proxy.pmsRoutine
 
         private void _hotelPmsClient_Disconnect()
         {
-            PmsLogger.Warn("A connect with the hotel's PMS had lost. Try to reconnect");
-            var mail = new Smtpmail.SendingMail(Program.Config.SendTo, "A connect with the hotel's PMS had lost.")
+            PmsLogger.Warn("A connect with the hotel's PMS has lost. Try to reconnect");
+            var mail = new Smtpmail.SendingMail(Program.Config.SendTo, "A connect with the hotel's PMS has lost.")
             {
-                Subj = "Connectin with PMS was dropped"
+                Subj = "Connecting with PMS was dropped"
             };
 
             mail.SendMail();

@@ -32,7 +32,7 @@ namespace hotel_mini_proxy.PmsInterface
         AreYouThere,
         AsOk,
         AsNg,
-
+        Asc,    
     }
 
     public sealed class ParserResult
@@ -59,6 +59,6 @@ namespace hotel_mini_proxy.PmsInterface
         public abstract string GetInitRequestString();
         public abstract string MakeBillingString(InvoiceObject obj);
 
-        public abstract List<ParserResult> Parcer(string str);
+        public abstract List<ParserResult> Parser(string str);
     }
 }

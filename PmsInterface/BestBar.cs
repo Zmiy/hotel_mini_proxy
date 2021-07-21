@@ -44,7 +44,7 @@ namespace hotel_mini_proxy.PmsInterface
             return $"{STX}{BuildBillingString(obj)}{ETX}";
         }
 
-        public override List<ParserResult> Parcer(string str)
+        public override List<ParserResult> Parser(string str)
         {
             var result = new List<ParserResult>();
             var currResult = new ParserResult();

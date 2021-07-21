@@ -170,31 +170,51 @@ namespace hotel_mini_proxy.pmsRoutine
                 return;
             }
             //var messFias = mess.Substring(1, mess.Length - 1);
-            var s = mess.Trim(STX, ETX).Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
+            var s = mess.Trim(STX, ETX).Split(new char[] { '|', ' ' }, StringSplitOptions.RemoveEmptyEntries);
             switch (s[0])
             {
                 case "LS":
                     {
                         SendToHotel($"{STX}LS|DA{Fdate()}|TI{Ftime()}|{ETX}", s[0]);
-
                         break;
                     }
 
                 case "LA":
                     {
-                        SendToHotel($"{STX}LA|DA{Fdate()}|TI{Ftime()}|{ETX}", s[0]);
+                        //SendToHotel($"{STX}LA|DA{Fdate()}|TI{Ftime()}|{ETX}", s[0]);
+                        HotelLogger.Info("Received keep alive message from the hote. Fire to the PMS");
+                        FirePmsMessage(mess, s[0]);
                         break;
                     }
 
                 case "PS":
+                case "00":
                     {
                         BillingLogger.Info($"Sending bill to the PMS:{mess}");
                         FirePmsMessage(mess, s[0]);
                         break;
                     }
-
+                case "14": 
+                    {
+                        HotelLogger.Info("Try to send info message");
+                        FirePmsMessage(mess, s[0]);
+                        break;
+                    }
                 case "LE":
                     {
+                        break;
+                    }
+                case "6":
+                    {
+                        HotelLogger.Info("Sent ASC message to the PMS");
+                        FirePmsMessage(mess, "ASC");
+                        break;
+                    }
+            
+                default:
+
+                    {
+                        // SendToHotel(mess, "");
                         break;
                     }
             }

@@ -10,37 +10,45 @@ using NLog;
 using uPLibrary.Networking.M2Mqtt;
 using TcpLibrary;
 using TcpClient = TcpLibrary.TcpClient;
+using System.Reflection;
 
 namespace hotel_mini_proxy
 {
     internal static class Program
     {
         // private static MqttClient _clientMqtt;
-        private static readonly TcpClient HotelPmsClient = new TcpClient();
-        private static readonly TcpServer HotelListener = new TcpServer();
+        // private static readonly TcpClient HotelPmsClient = new TcpClient();
+        // private static readonly TcpServer HotelListener = new TcpServer();
         public static Config Config;
+        public static readonly DateTime StartDateTime = DateTime.Now;
+        public static DateTime? LastPmsCommunicationTime = null;
         private static Protocol _prot;
         // private static X509Certificate2 _clientCert;
         // private static X509Certificate _caCert;
         private static readonly Logger MainLogger = LogManager.GetLogger("Main Broker");
         private static PmsBroker _pmsBroker;
         private static HotelBroker _hotelBroker;
-        private static MqttBroker _mqttBroker;
-        private static RabbitMqBroker _rabbitMqBroker;
+        // private static MqttBroker _mqttBroker;
+        // private static  RabbitMqBroker _rabbitMqBroker;
         private static SmartThing _smartThingBroker;
 
         private static void InitPmsProtocol()
         {
-            switch (Config.Interface)
+            switch (Config.Interface.ToLower())
             {
-                case "BestBar":
+                case "bestbar":
                     {
                         _prot = new BestBar();
                         break;
                     }
-                case "Homi":
+                case "homi":
                     {
                         _prot = new FiasTcp();
+                        break;
+                    }
+                case "bartech":
+                    {
+                        _prot = new Bartech();
                         break;
                     }
                 default:
@@ -73,6 +81,13 @@ namespace hotel_mini_proxy
         {
 
             MainLogger.Info("------------Started------------");
+            var version = Assembly.GetExecutingAssembly().GetName().Version;
+
+            var buildDate = new DateTime(2000, 1, 1)
+               .AddDays(version.Build).AddSeconds(version.Revision * 2);
+
+            var displayableVersion = $"{version} ({buildDate})";
+            MainLogger.Info(displayableVersion);
             Config = new Config(); //read a configuration info
             InitPmsProtocol();
             //Client to PMS
@@ -95,8 +110,9 @@ namespace hotel_mini_proxy
             // _mqttBroker.MqttToPms += _mqttBroker_MqttToPms;
             // _mqttBroker.SmartThingToPms += _mqttBroker_MqttToPms;
             InitSmartThingProtocol();
-            _smartThingBroker.Connect2SmartProtocol();
+           _smartThingBroker.Connect2SmartProtocol();
             _smartThingBroker.SmartThingToPms += _mqttBroker_MqttToPms;
+            
 
         }
 
@@ -119,6 +135,7 @@ namespace hotel_mini_proxy
         {
             MainLogger.Info($"Sending a {e.TypeOfAnswer}'s answer to the Hotel's broker");
             _hotelBroker.SendToHotel(e.Answer);
+            LastPmsCommunicationTime = DateTime.Now;
         }
 
         private static void PmsBroker_MqttAnswer(object sender, AnswerEventArgs e)
@@ -126,7 +143,7 @@ namespace hotel_mini_proxy
             MainLogger.Info($"Sending a {e.TypeOfAnswer}'s PMS's answer to MQTT broker");
             // _mqttBroker.SendToMqtt(e.Answer);
             _smartThingBroker.SendToMqtt(e.Answer);
-
+            LastPmsCommunicationTime = DateTime.Now;
         }
 
 
