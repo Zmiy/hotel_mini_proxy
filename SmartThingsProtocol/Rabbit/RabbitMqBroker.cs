@@ -29,7 +29,7 @@ namespace hotel_mini_proxy.SmartThingsProtocol.Rabbit
         {
             this._config = config;
             _prot = protocol;
-            // QuoueWorker = new RabbitWorker(_config.QueueTopic);
+            // QuoueWorker = new RabbitWorker(_config.QueueTopicIn);
         }
 
         public override void Connect2SmartProtocol()
@@ -44,10 +44,10 @@ namespace hotel_mini_proxy.SmartThingsProtocol.Rabbit
 
         private void Connect()
         {
-            _factory = new ConnectionFactory() { HostName = "localhost" };
+            _factory = new ConnectionFactory() { HostName = _config.RabbitHost, UserName = _config.RabbitUserName, Password = _config.RabbitPassword };
             _connection = _factory.CreateConnection();
             _channel = _connection.CreateModel();
-            _channel.QueueDeclare(queue: _config.QueueTopic, durable: true, exclusive: false, autoDelete: false, arguments: null);
+            _channel.QueueDeclare(queue: _config.RabbitTopicIn, durable: true, exclusive: false, autoDelete: false, arguments: null);
             _channel.BasicQos(prefetchSize: 0, prefetchCount: 1, global: false);
         }
 
@@ -66,13 +66,13 @@ namespace hotel_mini_proxy.SmartThingsProtocol.Rabbit
             while (_connection.IsOpen)
             {
 
-                BasicGetResult result = _channel.BasicGet(queue: _config.QueueTopic, autoAck: false);
+                BasicGetResult result = _channel.BasicGet(queue: _config.RabbitTopicIn, autoAck: false);
                 if (result != null)
                 {
                     var msg = Encoding.UTF8.GetString(result.Body.ToArray());
                     var s = msg.Trim(ChrOperation.STX, ChrOperation.ETX).Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
                     RabbitLogger.Trace(" [x] Received From rabbit Broker{0}", msg);
-                    RabbitLogger.Trace($"Received From MQTT (queue:{_config.QueueTopic}): <STX>{msg}<ETX>");
+                    RabbitLogger.Trace($"Received From MQTT (queue:{_config.RabbitTopicIn}): <STX>{msg}<ETX>");
                     switch (s[0])
                     {
 
@@ -88,6 +88,7 @@ namespace hotel_mini_proxy.SmartThingsProtocol.Rabbit
                             break;
                         case "LA":
                             // _clientMqtt.Publish(_config.PublicTopic, Encoding.UTF8.GetBytes($"{ChrOperation.STX}{msg}{ChrOperation.ETX}"), MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, false);
+                            Rabbit_Publish($"{ChrOperation.STX}{msg}{ChrOperation.ETX}");
                             RabbitLogger.Trace($"Sent LA's answer to Mqtt: <STX>{msg}<ETX>");
                             break;
                     }
@@ -109,9 +110,36 @@ namespace hotel_mini_proxy.SmartThingsProtocol.Rabbit
 
 
 
-        public override void SendToMqtt(string answer)
+        public override void SendToMqtt(string message)
         {
-            throw new NotImplementedException();
+            if (message.Contains("|PA|"))
+            {
+                BillingLogger.Info($"Send PA's answer: <STX>{message.Trim(ChrOperation.STX, ChrOperation.ETX)}<ETX> to the Rabbit brocker");
+            }
+            Rabbit_Publish(message);
+            RabbitLogger.Trace($"Sent message from PMS to Mqtt: <STX>{message.Trim(ChrOperation.STX, ChrOperation.ETX)}<ETX>");
+        }
+
+        private void Rabbit_Publish(string message)
+        {
+            _channel.QueueDeclare(
+                                 queue: _config.RabbitTopicOut,
+                                 durable: true,
+                                 exclusive: false,
+                                 autoDelete: false,
+                                 arguments: null);
+
+            var body = Encoding.UTF8.GetBytes(message);
+
+            var properties = _channel.CreateBasicProperties();
+            properties.Persistent = true;
+
+            _channel.BasicPublish(exchange: _config.RabbitExchange,
+                                 routingKey: _config.RabbitTopicOut,
+                                 basicProperties: properties,
+                                 body: body);
+
+
         }
     }
 }

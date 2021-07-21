@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Runtime.CompilerServices;
 using Newtonsoft.Json;
 
 namespace hotel_mini_proxy
@@ -7,6 +8,8 @@ namespace hotel_mini_proxy
     {
         internal int MqttPort { get; private set; }
         internal string MqttHost { get; private set; }
+
+        internal string RabbitHost { get; private set; }
         internal string HotelHost { get; private set; }
         internal int HotelPort { get; private set; }
         internal int ListenerPort { get; private set; }
@@ -22,12 +25,17 @@ namespace hotel_mini_proxy
         internal string SmtpPassword { get; private set; }
         internal string SendTo { get; private set; }
 
-        internal string QueueTopic { get; private set; }
+        internal string RabbitTopicIn { get; private set; }
+        internal string RabbitTopicOut { get; private set; }
 
         private readonly bool? _useSsl;
         private readonly bool? _useAutorization;
+        private readonly bool? _useRabbitAutorizathion;
         private readonly string _userName;
         private readonly string _password;
+        private readonly string _rabbitExchange;
+        private readonly string _rabbitUserName;
+        private readonly string _rabbitPassword;
         private readonly string _mqttGroupId;
         private readonly string _mqttPlaceId;
         private readonly string _mqttTopicIn;
@@ -67,8 +75,13 @@ namespace hotel_mini_proxy
                 this.SmtpUser = config["smtpMailOptions"]["SMTPUser"];
                 this.SmtpPassword = config["smtpMailOptions"]["SMTPPassword"];
                 this.SendTo = config["smtpMailOptions"]["SendTo"];
-
-                this.QueueTopic = config["queue"]["topic"];
+                this._useRabbitAutorizathion = config["useRabitAutorization"];
+                // this.QueueTopicIn = config["queue"]["topic"];
+                this.RabbitTopicIn = config["rabbitTopicIn"];
+                this.RabbitTopicOut = config["rabbitTopicOut"];
+                this.RabbitHost = config["rabbitClientOptions"]["host"];
+                this._rabbitPassword = config["rabbitClientOptions"]["password"];
+                this._rabbitUserName = config["rabbitClientOptions"]["userName"];
             }
         }
 
@@ -80,6 +93,10 @@ namespace hotel_mini_proxy
         public bool UseAutorization => this._useAutorization ?? false;
         public string UserName => this._userName ?? "";
         public string Password => this._password ?? "";
+        public bool UseRabbitAutorization => this._useRabbitAutorizathion ?? true;
+        public string RabbitUserName => this._rabbitUserName ?? "guest";
+        public string RabbitPassword => this._rabbitPassword ?? "guest";
+        public string RabbitExchange => this._rabbitExchange ?? "";
 
     }
 }

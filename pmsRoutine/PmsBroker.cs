@@ -233,8 +233,8 @@ namespace hotel_mini_proxy.pmsRoutine
 
         private void _hotelPmsClient_Disconnect()
         {
-            PmsLogger.Warn("A connect with the hotel's PMS had lost. Try to reconnect");
-            var mail = new Smtpmail.SendingMail(Program.Config.SendTo, "A connect with the hotel's PMS had lost.")
+            PmsLogger.Warn("A connect with the hotel's PMS has lost. Try to reconnect");
+            var mail = new Smtpmail.SendingMail(Program.Config.SendTo, "A connect with the hotel's PMS has lost.")
             {
                 Subj = "Connectin with PMS was dropped"
             };

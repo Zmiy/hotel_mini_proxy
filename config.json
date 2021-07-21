@@ -33,6 +33,15 @@
     "SendTo": "evgeny@3pi-solutions.com"
   },
   "smartThingInterface": "mqtt",
+  "rabbitClientOptions": {
+    "host": "https://orangutan.rmq.cloudamqp.com/",
+    "useAutorization": true,
+    "userName": "dbjjvevp",
+    "password": "ofxiLfaLkwgC4DgLOufq-oQyY9boyrKE",
+    "exchange": ""
+  },
+  "rabbitTopicIn": "rothschild22.gate.receiver",
+  "rabbitTopicOut": "rothschild22.gate.transponder",
   "queue": {
     "topic": "save"
   }
